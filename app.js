@@ -42,8 +42,13 @@ class Engine {
 
   async init() {
     const ready = this.wait(/^uciok$/);
+    // a failed script/wasm load surfaces as an error event on the worker;
+    // without this the app would sit on "Loading engine…" forever
+    const failed = new Promise((_, reject) => {
+      this.worker.addEventListener('error', () => reject(new Error('engine failed to load')));
+    });
     this.send('uci');
-    await ready;
+    await Promise.race([ready, failed]);
     this.send('setoption name UCI_LimitStrength value true');
   }
 
@@ -589,14 +594,33 @@ async function engineMove() {
   ground.playPremove();
 }
 
+const PROMO_GLYPHS = {
+  white: { q: '♕', r: '♖', b: '♗', n: '♘' },
+  black: { q: '♛', r: '♜', b: '♝', n: '♞' },
+};
+
 function askPromotion() {
+  // show the pieces in the promoting side's colour
+  for (const btn of promoOverlay.querySelectorAll('button[data-piece]')) {
+    btn.textContent = PROMO_GLYPHS[playerColor][btn.dataset.piece];
+  }
   promoOverlay.classList.remove('hidden');
+  const prevFocus = document.activeElement;
+  promoOverlay.querySelector('button[data-piece]').focus();
   return new Promise((resolve) => {
     const done = (value) => {
       promoOverlay.classList.add('hidden');
       promoOverlay.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      if (prevFocus && prevFocus.focus) prevFocus.focus();
       resolve(value);
     };
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      done(null);
+    };
+    document.addEventListener('keydown', onKey);
     promoOverlay.onclick = (e) => {
       const btn = e.target.closest('button[data-piece]');
       done(btn ? btn.dataset.piece : null);
@@ -654,6 +678,7 @@ function loadGameFromPgn(text) {
 }
 
 const savePosBtn = document.getElementById('save-pos');
+let savePosTimer = 0;
 
 // Put the current (or currently reviewed) position in the URL and copy the
 // link — the URL is the save file: bookmark it, open it later, drill it.
@@ -666,12 +691,14 @@ async function savePositionLink() {
     copied = true;
   } catch { /* clipboard unavailable — the URL bar still has the link */ }
   savePosBtn.textContent = copied ? 'Link copied ✓' : 'Link in URL bar ✓';
-  setTimeout(() => { savePosBtn.textContent = 'Copy position link'; }, 1500);
+  clearTimeout(savePosTimer); // a rapid second click must not cut its own toast short
+  savePosTimer = setTimeout(() => { savePosBtn.textContent = 'Copy position link'; }, 1500);
   return fen;
 }
 
 savePosBtn.addEventListener('click', savePositionLink);
 
+let pgnFlashTimer = 0;
 pgnInput.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   if (loadGameFromPgn(pgnInput.value)) {
@@ -679,7 +706,8 @@ pgnInput.addEventListener('keydown', (e) => {
     pgnInput.blur();
   } else {
     pgnInput.classList.add('invalid');
-    setTimeout(() => pgnInput.classList.remove('invalid'), 800);
+    clearTimeout(pgnFlashTimer);
+    pgnFlashTimer = setTimeout(() => pgnInput.classList.remove('invalid'), 800);
   }
 });
 
@@ -751,9 +779,16 @@ function newGame() {
 
 async function loadPositions() {
   try {
-    positions = await (await fetch('positions.json')).json();
+    const res = await fetch('positions.json');
+    if (!res.ok) throw new Error(res.status);
+    positions = await res.json();
   } catch {
-    return; // trainer unavailable; free play still works
+    // trainer unavailable; free play still works — but say so in the menu
+    const o = document.createElement('option');
+    o.disabled = true;
+    o.textContent = "couldn't load training positions";
+    trainerSelect.appendChild(o);
+    return;
   }
   const groups = new Map();
   positions.forEach((p, i) => {
@@ -786,11 +821,17 @@ function undo() {
 }
 
 const muteBtn = document.getElementById('mute');
-muteBtn.textContent = muted ? '🔇' : '🔊';
+function renderMute() {
+  muteBtn.textContent = muted ? '🔇' : '🔊';
+  muteBtn.title = muted ? 'Unmute' : 'Mute';
+  muteBtn.setAttribute('aria-label', muteBtn.title);
+  muteBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+}
+renderMute();
 muteBtn.addEventListener('click', () => {
   muted = !muted;
   localStorage.setItem('muted', muted ? '1' : '0');
-  muteBtn.textContent = muted ? '🔇' : '🔊';
+  renderMute();
 });
 
 document.getElementById('new-game').addEventListener('click', newGame);
@@ -806,7 +847,16 @@ eloInput.addEventListener('input', () => {
 
 statusEl.textContent = 'Loading engine…';
 loadPositions(); // in parallel with engine init
-await engine.init();
+try {
+  await engine.init();
+} catch {
+  statusEl.textContent = 'Engine failed to load — check your connection and reload the page.';
+  statusEl.classList.add('error');
+  ground.set({ movable: { color: undefined } });
+  throw new Error('engine failed to load'); // new-game/hint/undo stay disabled
+}
+hintBtn.disabled = false;
+document.getElementById('new-game').disabled = false;
 const bootParams = new URLSearchParams(location.search);
 const linkedPgn = bootParams.get('pgn');
 const linkedFen = bootParams.get('fen');

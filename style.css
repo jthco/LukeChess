@@ -133,6 +133,24 @@ h1 {
   color: #629924;
 }
 
+#status.error {
+  color: #df5353;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid #629924;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #eval-white {
+    transition: none;
+  }
+}
+
 .controls {
   display: flex;
   flex-direction: column;
@@ -236,10 +254,11 @@ h1 {
 }
 
 /* narrow screens: shrink the board so it fits beside the eval bar
-   (16px bar + 8px gap + 12px padding each side = 48px) */
+   (16px bar + 8px gap + 12px padding each side = 48px, plus 16px for the
+   scrollbar gutter — 100vw includes the scrollbar the gutter reserves) */
 @media (max-width: 740px) {
   :root {
-    --board-size: min(calc(100vw - 48px), 560px);
+    --board-size: min(calc(100vw - 64px), 560px);
   }
 
   main {

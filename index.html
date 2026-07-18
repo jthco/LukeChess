@@ -28,8 +28,8 @@
     </div>
     <div class="board-col">
       <div class="buttons board-actions">
-        <button id="hint">Get a hint</button>
-        <button id="undo">Undo</button>
+        <button id="hint" disabled>Get a hint</button>
+        <button id="undo" disabled>Undo</button>
       </div>
       <div id="board" class="cg-wrap"></div>
       <div id="promo-overlay" class="hidden">
@@ -71,7 +71,7 @@
           <input id="elo" type="range" min="1320" max="3190" step="10" value="1600">
         </label>
         <div class="buttons">
-          <button id="new-game">New game</button>
+          <button id="new-game" disabled>New game</button>
           <button id="flip">Flip board</button>
           <button id="mute" title="Toggle sound">🔊</button>
         </div>

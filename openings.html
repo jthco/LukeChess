@@ -97,6 +97,11 @@
       line-height: 1;
     }
     #status { color: #6f6c66; font-size: 0.9rem; }
+    #status.error { color: #df5353; }
+    a:focus-visible, input:focus-visible {
+      outline: 2px solid #629924;
+      outline-offset: 2px;
+    }
     @media (max-width: 560px) { .moves { display: none; } }
   </style>
 </head>
@@ -126,7 +131,10 @@
     const filter = document.getElementById('filter');
 
     fetch('openings.json')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(r.status);
+        return r.json();
+      })
       .then((openings) => {
         const frag = document.createDocumentFragment();
         let list = null;
@@ -177,7 +185,10 @@
         });
         book.dataset.total = openings.length;
       })
-      .catch(() => { status.textContent = 'Could not load openings.json.'; });
+      .catch(() => {
+        status.textContent = 'Could not load the openings — check your connection and reload.';
+        status.classList.add('error');
+      });
   </script>
 </body>
 </html>
