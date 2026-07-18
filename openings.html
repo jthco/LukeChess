@@ -14,6 +14,7 @@
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>♞</text></svg>">
+  <link rel="stylesheet" href="kit.css">
   <style>
     * { box-sizing: border-box; }
     body {
@@ -117,6 +118,7 @@
     <p class="sub">Rows show whose move it is when the line ends: ○ you play White · ● you play Black (shaded).</p>
     <div id="book"></div>
   </main>
+  <script src="kit.js"></script>
   <script>
     const VOLUMES = {
       A: 'Flank openings — 1. c4, 1. Nf3, 1. f4 and friends',
@@ -130,10 +132,10 @@
     const status = document.getElementById('status');
     const filter = document.getElementById('filter');
 
-    fetch('openings.json')
+    SolidKit.loadJson(fetch, 'openings.json')
       .then((r) => {
-        if (!r.ok) throw new Error(r.status);
-        return r.json();
+        if (!r.ok || r.missing) throw new Error(r.status);
+        return r.data;
       })
       .then((openings) => {
         const frag = document.createDocumentFragment();

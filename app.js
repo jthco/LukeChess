@@ -685,11 +685,9 @@ let savePosTimer = 0;
 async function savePositionLink() {
   const fen = analysis ? analysis.fens[analysis.viewPly] : chess.fen();
   history.replaceState(null, '', `?fen=${encodeURIComponent(fen)}`);
-  let copied = false;
-  try {
-    await navigator.clipboard.writeText(location.href);
-    copied = true;
-  } catch { /* clipboard unavailable — the URL bar still has the link */ }
+  // clipboard API with an execCommand fallback; reports the truth either way —
+  // when it can't copy, the link is still in the URL bar
+  const copied = await SolidKit.copyText(location.href);
   savePosBtn.textContent = copied ? 'Link copied ✓' : 'Link in URL bar ✓';
   clearTimeout(savePosTimer); // a rapid second click must not cut its own toast short
   savePosTimer = setTimeout(() => { savePosBtn.textContent = 'Copy position link'; }, 1500);
@@ -778,18 +776,17 @@ function newGame() {
 }
 
 async function loadPositions() {
-  try {
-    const res = await fetch('positions.json');
-    if (!res.ok) throw new Error(res.status);
-    positions = await res.json();
-  } catch {
-    // trainer unavailable; free play still works — but say so in the menu
+  const r = await SolidKit.loadJson(fetch, 'positions.json');
+  if (!r.ok || r.missing) {
+    // trainer unavailable (missing, network, or unparseable); free play still
+    // works — but say so in the menu
     const o = document.createElement('option');
     o.disabled = true;
     o.textContent = "couldn't load training positions";
     trainerSelect.appendChild(o);
     return;
   }
+  positions = r.data;
   const groups = new Map();
   positions.forEach((p, i) => {
     let g = groups.get(p.category);
