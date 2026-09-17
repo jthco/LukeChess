@@ -24,7 +24,8 @@ python3 -m http.server 8123
 
 - Drag-and-drop board (chessground — lichess's own board UI), legal-move
   hints, last-move and check highlights, premoves
-- Play as White, Black, or random side
+- Play as White, Black, or random side — or "Both" for pass-and-play with a
+  friend on one device (the engine sits out; undo takes back one move)
 - Engine strength slider: 1320–3190 Elo (`UCI_LimitStrength` / `UCI_Elo`)
 - Move list, undo, flip board, promotion picker
 - Checkmate / stalemate / draw detection (chess.js)

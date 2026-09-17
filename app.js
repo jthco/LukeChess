@@ -101,6 +101,7 @@ const chess = new Chess();
 const engine = new Engine('vendor/stockfish-18-lite-single.js');
 
 let playerColor = 'white';
+let twoPlayer = false; // pass-and-play: both sides are human, the engine only evaluates
 let thinking = false;
 let searchId = 0; // bumped on new game to discard stale engine replies
 let trainer = null; // active training position {fen, name, goal, playerSide}, or null
@@ -115,6 +116,7 @@ const undoBtn = document.getElementById('undo');
 const hintBtn = document.getElementById('hint');
 const promoOverlay = document.getElementById('promo-overlay');
 const trainerSelect = document.getElementById('trainer-select');
+const strengthControl = document.getElementById('strength-control');
 const evalFill = document.getElementById('eval-white');
 const evalNum = document.getElementById('eval-num');
 const pgnInput = document.getElementById('pgn-input');
@@ -314,7 +316,7 @@ function gotoPly(ply) {
     turnColor: fullColor(pos.turn()),
     check: pos.inCheck(),
     lastMove: mv ? [mv.from, mv.to] : undefined,
-    movable: atLiveEnd ? { color: playerColor, dests: toDests() } : { color: undefined },
+    movable: atLiveEnd ? { color: moverColor(), dests: toDests() } : { color: undefined },
   });
   setBarFromAnalysis(ply);
   // show what the engine would have played here
@@ -404,6 +406,11 @@ function fullColor(c) {
   return c === 'w' ? 'white' : 'black';
 }
 
+// the side allowed to move pieces right now
+function moverColor() {
+  return twoPlayer ? fullColor(chess.turn()) : playerColor;
+}
+
 function toDests() {
   const dests = new Map();
   for (const m of chess.moves({ verbose: true })) {
@@ -421,7 +428,7 @@ function sync(lastMove) {
     check: chess.inCheck(),
     ...(lastMove ? { lastMove } : {}),
     movable: {
-      color: !thinking && !chess.isGameOver() ? playerColor : undefined,
+      color: !thinking && !chess.isGameOver() ? moverColor() : undefined,
       dests: toDests(),
     },
   });
@@ -482,7 +489,10 @@ function renderStatus() {
     return;
   }
   if (chess.isCheckmate()) {
-    const winner = fullColor(chess.turn()) === playerColor ? 'Stockfish wins' : 'You win';
+    const loser = fullColor(chess.turn());
+    const winner = twoPlayer
+      ? `${loser === 'white' ? 'Black' : 'White'} wins`
+      : loser === playerColor ? 'Stockfish wins' : 'You win';
     statusEl.textContent = `Checkmate — ${winner}!`;
   } else if (chess.isStalemate()) {
     statusEl.textContent = 'Draw — stalemate.';
@@ -495,7 +505,8 @@ function renderStatus() {
   } else if (thinking) {
     statusEl.textContent = 'Stockfish is thinking…';
   } else {
-    const move = chess.inCheck() ? 'Your move — check!' : 'Your move.';
+    const who = twoPlayer ? `${chess.turn() === 'w' ? 'White' : 'Black'} to move` : 'Your move';
+    const move = chess.inCheck() ? `${who} — check!` : `${who}.`;
     statusEl.textContent = trainer ? `Goal: ${trainerGoalText()}. ${move}` : move;
   }
 }
@@ -571,7 +582,9 @@ function applyUserMove(orig, dest, promotion) {
   if (analysis) clearAnalysis(); // continuing a loaded game ends its review
   soundForMove(move);
   sync([orig, dest]);
-  if (!chess.isGameOver()) engineMove();
+  if (chess.isGameOver()) return;
+  if (twoPlayer) evalCurrent(); // the other human replies; keep the bar honest
+  else engineMove();
 }
 
 async function engineMove() {
@@ -602,7 +615,7 @@ const PROMO_GLYPHS = {
 function askPromotion() {
   // show the pieces in the promoting side's colour
   for (const btn of promoOverlay.querySelectorAll('button[data-piece]')) {
-    btn.textContent = PROMO_GLYPHS[playerColor][btn.dataset.piece];
+    btn.textContent = PROMO_GLYPHS[fullColor(chess.turn())][btn.dataset.piece];
   }
   promoOverlay.classList.remove('hidden');
   const prevFocus = document.activeElement;
@@ -665,11 +678,13 @@ function loadGameFromPgn(text) {
   engine.newGame();
   engine.setElo(Number(eloInput.value));
   chess.loadPgn(loaded.pgn());
+  twoPlayer = colorSelect.value === 'both';
+  strengthControl.hidden = twoPlayer;
   playerColor = fullColor(chess.turn()); // if unfinished, you continue as the side to move
   ground.set({ orientation: playerColor });
   ground.cancelPremove();
   ground.setAutoShapes([]);
-  minHistoryForUndo = chess.history().length + 2; // undo only moves made after loading
+  minHistoryForUndo = chess.history().length + (twoPlayer ? 1 : 2); // undo only moves made after loading
   const last = chess.history({ verbose: true }).at(-1);
   sync([last.from, last.to]);
   updatePermalink();
@@ -722,13 +737,17 @@ function startFreePlay() {
   history.replaceState(null, '', location.pathname); // fresh game, fresh URL
   chess.reset();
   const choice = colorSelect.value;
-  playerColor = choice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black') : choice;
+  twoPlayer = choice === 'both';
+  playerColor = choice === 'random' ? (Math.random() < 0.5 ? 'white' : 'black')
+    : twoPlayer ? 'white' // board from White's side; "Flip board" for the other chair
+    : choice;
   begin();
 }
 
 function startTrainer(p) {
   trainer = p;
   startFen = null;
+  twoPlayer = false; // the trainer is you against the engine
   history.replaceState(null, '', location.pathname);
   chess.load(p.fen);
   playerColor = fullColor(p.playerSide);
@@ -745,6 +764,7 @@ function startFromFen(fen) {
   trainer = null;
   trainerSelect.value = '';
   startFen = fen;
+  twoPlayer = colorSelect.value === 'both';
   chess.load(fen);
   playerColor = fullColor(chess.turn()); // you play the side to move
   begin();
@@ -761,8 +781,9 @@ function begin() {
   ground.set({ orientation: playerColor, lastMove: undefined });
   ground.cancelPremove();
   ground.setAutoShapes([]);
-  const engineFirst = fullColor(chess.turn()) !== playerColor;
-  minHistoryForUndo = (engineFirst ? 1 : 0) + 2;
+  strengthControl.hidden = twoPlayer; // the engine doesn't play in pass-and-play
+  const engineFirst = !twoPlayer && fullColor(chess.turn()) !== playerColor;
+  minHistoryForUndo = twoPlayer ? 1 : (engineFirst ? 1 : 0) + 2;
   sync();
   if (engineFirst) engineMove();
   else evalCurrent();
@@ -809,9 +830,14 @@ trainerSelect.addEventListener('change', () => {
 });
 
 function undo() {
-  if (thinking || chess.turn() !== playerColor[0]) return;
-  chess.undo(); // engine's reply
-  chess.undo(); // player's move
+  if (thinking) return;
+  if (twoPlayer) {
+    chess.undo(); // take back the last move, whoever made it
+  } else {
+    if (chess.turn() !== playerColor[0]) return;
+    chess.undo(); // engine's reply
+    chess.undo(); // player's move
+  }
   const last = chess.history({ verbose: true }).at(-1);
   sync(last ? [last.from, last.to] : undefined);
   evalCurrent();
