@@ -250,20 +250,66 @@ const puppeteer = require("puppeteer-core");
           noRing[i + 2] > 0.8 && noRing[i + 3] < 0.05 && noRing[i + 4] < 0.05;
       f.options.captureRadius = 0.22;
       const ring = f.vertices({ seed: 0, moves }, false);
-      const destination = f.point("d5");
+      const destination = f.point("d7");
+      destination[1] -= 1 / 16;
       let sx = 0,
         sy = 0,
         count = 0;
       // Ring is appended after this pawn's two segments, before the black path.
-      for (let i = chunk * 2; i < chunk * 2 + 48 * 36; i += 6) {
+      for (let i = chunk * 2 + 48 * 36; i < chunk * 2 + 2 * 48 * 36; i += 6) {
         sx += ring[i];
         sy += ring[i + 1];
         count++;
       }
+      const deepWidth = Math.abs(ring[chunk * 2 + 6] - ring[chunk * 2]);
+      const redOffset = chunk * 2 + 48 * 36;
+      const rx = (ring[redOffset] + ring[redOffset + 6]) / 2 - destination[0];
+      const quarter = redOffset + 12 * 36;
+      const ry = (ring[quarter + 1] + ring[quarter + 7]) / 2 - destination[1];
+      const green = ring[chunk * 2 + 3] > ring[chunk * 2 + 2];
+      f.fen = "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1";
+      const direct = f.vertices(
+        {
+          seed: 0,
+          moves: [
+            { from: "e4", to: "d5", piece: "p", color: "w", capture: true },
+          ],
+        },
+        false,
+      );
+      const directWidth = Math.abs(direct[chunk + 6] - direct[chunk]);
+      f.fen = "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1";
+      const ep = f.vertices(
+        {
+          seed: 0,
+          moves: [
+            { from: "e5", to: "d6", piece: "p", color: "w", capture: true },
+          ],
+        },
+        false,
+      );
+      const epCentre = f.point("d5");
+      epCentre[1] -= 1 / 16;
+      const offset = chunk + 48 * 36;
+      let ex = 0,
+        ey = 0;
+      for (let i = offset; i < offset + 48 * 36; i += 6) {
+        ex += ep[i];
+        ey += ep[i + 1];
+      }
+      const epError = Math.hypot(
+        ex / (48 * 6) - epCentre[0],
+        ey / (48 * 6) - epCentre[1],
+      );
       f.fen = fen;
       f.options = options;
       f.selected = selected;
       return {
+        deepWidth,
+        directWidth,
+        ellipseRatio: rx / ry,
+        green,
+        epError,
         alphas,
         startWidth,
         endWidth,
@@ -285,10 +331,23 @@ const puppeteer = require("puppeteer-core");
       "Actual search generations must fade progressively",
     );
     assert(appearance.red, "Entire capture-ending journey must be red");
-    assert.equal(appearance.ringAdded, 48 * 36);
+    assert.equal(appearance.ringAdded, 2 * 48 * 36);
     assert(
       appearance.centreError < 1e-6,
-      "Capture ring must centre on the real destination",
+      "Capture ellipse must sit under the target piece",
+    );
+    assert(appearance.green, "Capturing piece must have a green circle");
+    assert(
+      Math.abs(appearance.ellipseRatio - 2) < 1e-6,
+      "Target ellipse must be twice as wide as tall",
+    );
+    assert(
+      Math.abs(appearance.directWidth / appearance.deepWidth - 3) < 1e-6,
+      "Three-ply captures must have one third the marker stroke width",
+    );
+    assert(
+      appearance.epError < 1e-6,
+      "En passant must mark the captured pawn, not the empty landing square",
     );
     // Tuning must affect real geometry and persist through a reload.
     const tuning = await page.evaluate(async () => {

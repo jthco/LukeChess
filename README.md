@@ -53,9 +53,14 @@ WebGL2 is required for the forest; chess remains playable without it.
   actual search ply rather than the number of times that piece moved. Width
   and scatter also taper with actual search depth.
 - A piece journey ending in a capture is red along its entire length, overriding
-  normal palettes and tints. A red ring is drawn at the actual capture square,
-  independently of endpoint scatter; en passant uses the capturing pawn's
-  destination. These marks share their layer's accumulation and fading.
+  normal palettes and tints. The capturing piece gets a green circle and its
+  target a red ellipse, both below the sprites at their current root-position
+  squares. The ellipse has the same height as the circle and twice the width,
+  centred 75% down the square on screen, including after board flips. Root
+  identities also locate a target that moves later, or an en passant victim.
+  Marker stroke width defaults to 12 CSS pixels divided by search ply, so
+  immediate captures are thickest; width, depth thinning, and radius have faders.
+  These marks share their layer's accumulation and fading.
 - Position changes clear old feedback/queues and invalidate messages by position
   generation. Board flips clear orientation-dependent feedback. Selection routes
   new strokes without restarting search; old strokes fade naturally. Playback

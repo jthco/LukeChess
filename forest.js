@@ -235,6 +235,9 @@ export class Forest {
       const id = ids.get(m.from);
       if (!id) continue;
       const occupied = ids.has(m.to);
+      const victimSquare =
+        m.piece === "p" && m.capture && !occupied ? m.to[0] + m.from[1] : m.to;
+      const victimId = m.capture ? ids.get(victimSquare) : null;
       ids.delete(m.from);
       ids.set(m.to, id);
       if (m.piece === "p" && m.capture && !occupied && m.from[0] !== m.to[0])
@@ -278,6 +281,7 @@ export class Forest {
       j.checks.push(m.check);
       j.depths.push(ply + 1);
       j.captures.push(!!m.capture);
+      if (m.capture) j.captureTarget = victimId;
     }
     const out = [];
     for (const [id, j] of journeys) {
@@ -394,36 +398,54 @@ export class Forest {
         start = end;
       }
       if (captureEnding && options.captureRadius > 0) {
-        // Capture destination is the real square centre, not the scattered endpoint.
-        const centre = this.point(j.points.at(-1)),
-          radius = options.captureRadius / 4;
+        const radius = options.captureRadius / 4;
         const settings = selected
           ? this.settings.selected
           : this.settings.forest;
+        const depth = j.depths.at(-1);
         const alpha =
           settings.strokeOpacity *
-          Math.exp(-options.generationFade * (j.depths.at(-1) - 1));
-        const halfWidth =
-          options.width / this.canvas.getBoundingClientRect().width;
-        const vertex = (angle, offset) => [
-          centre[0] + Math.cos(angle) * (radius + offset),
-          centre[1] + Math.sin(angle) * (radius + offset),
-          0.88,
-          0.025,
-          0.035,
-          alpha,
-        ];
-        for (let i = 0; i < 48; i++) {
-          const a = (i * Math.PI) / 24,
-            b = ((i + 1) * Math.PI) / 24;
-          out.push(
-            ...vertex(a, -halfWidth),
-            ...vertex(a, halfWidth),
-            ...vertex(b, halfWidth),
-            ...vertex(a, -halfWidth),
-            ...vertex(b, halfWidth),
-            ...vertex(b, -halfWidth),
-          );
+          Math.exp(-options.generationFade * (depth - 1));
+        const halfWidth = Math.min(
+          radius * 0.8,
+          options.captureWidth /
+            this.canvas.getBoundingClientRect().width /
+            Math.pow(depth, options.captureTaper),
+        );
+        const ring = (centre, rx, ry, color) => {
+          const vertex = (angle, side) => {
+            const x = Math.cos(angle),
+              y = Math.sin(angle),
+              nx = x / rx,
+              ny = y / ry,
+              len = Math.hypot(nx, ny);
+            return [
+              centre[0] + x * rx + (nx / len) * halfWidth * side,
+              centre[1] + y * ry + (ny / len) * halfWidth * side,
+              ...color,
+              alpha,
+            ];
+          };
+          for (let i = 0; i < 48; i++) {
+            const a = (i * Math.PI) / 24,
+              b = ((i + 1) * Math.PI) / 24;
+            out.push(
+              ...vertex(a, -1),
+              ...vertex(a, 1),
+              ...vertex(b, 1),
+              ...vertex(a, -1),
+              ...vertex(b, 1),
+              ...vertex(b, -1),
+            );
+          }
+        };
+        // Root identities locate the pieces on the current board, even if they
+        // move inside the future variation. The overlay stays below piece sprites.
+        ring(this.point(id), radius, radius, [0.04, 0.65, 0.12]);
+        if (j.captureTarget) {
+          const centre = this.point(j.captureTarget);
+          centre[1] -= 1 / 16;
+          ring(centre, radius * 2, radius, [0.88, 0.025, 0.035]);
         }
       }
     }
