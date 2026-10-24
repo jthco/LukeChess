@@ -267,7 +267,7 @@ export class Forest {
           dy = target[1] - start[1],
           len = Math.hypot(dx, dy) || 1;
         const sign = Math.sin(seed + k * 19.37),
-          scatter = (sign * 0.085) / Math.sqrt(k);
+          scatter = (sign * 0.0425) / Math.sqrt(k);
         // Junction jitter is perpendicular, shared by adjacent segments.
         const end = [
           target[0] - (dy / len) * scatter,
@@ -275,9 +275,9 @@ export class Forest {
         ];
         const control = [
           (start[0] + end[0]) / 2 -
-            (dy / len) * (0.07 + Math.abs(sign) * 0.09) * Math.sign(sign),
+            (dy / len) * (0.035 + Math.abs(sign) * 0.045) * Math.sign(sign),
           (start[1] + end[1]) / 2 +
-            (dx / len) * (0.07 + Math.abs(sign) * 0.09) * Math.sign(sign),
+            (dx / len) * (0.035 + Math.abs(sign) * 0.045) * Math.sign(sign),
         ];
         const settings = selected
           ? this.settings.selected
