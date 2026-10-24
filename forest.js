@@ -1,3 +1,4 @@
+import { createForestTuning, bendDirection } from "./forest-tuning.js";
 // WebGL2 feedback layers. Search supplies structure; only stroke shape is varied here.
 export class Forest {
   constructor(board, ground) {
@@ -6,6 +7,8 @@ export class Forest {
     this.queue = [];
     this.fen = "";
     this.selected = null;
+    this.tuning = createForestTuning();
+    this.options = this.tuning.read();
     this.settings = {
       forest: { strokeOpacity: 0.28, fade: 1, tint: null },
       selected: { strokeOpacity: 0.4, canvasOpacity: 1, fade: 1.4, tint: null },
@@ -192,12 +195,17 @@ export class Forest {
   }
   setPosition(fen) {
     if (!this.worker || fen === this.fen) return;
+    clearTimeout(this.searchTimer);
     this.fen = fen;
     this.id++;
     this.queue = [];
     this.stats.visited = 0;
     this.clear();
-    this.worker.postMessage({ id: this.id, fen });
+    this.worker.postMessage({ id: this.id, fen, ...this.searchOptions() });
+  }
+  searchOptions() {
+    const { searchDepth, burstMs, intervalMs } = this.options;
+    return { searchDepth, burstMs, intervalMs };
   }
   point(square) {
     let x = (square.charCodeAt(0) - 97 + 0.5) / 8,
@@ -260,38 +268,62 @@ export class Forest {
       if ((id === this.selected) !== selected) continue;
       const pts = j.points.map((s) => this.point(s));
       let start = pts[0];
-      let seed = id.charCodeAt(0) * 97 + Number(id[1]) * 31 + path.seed * 13;
+      const options = this.options;
       for (let k = 1; k < pts.length; k++) {
         const target = pts[k],
           dx = target[0] - start[0],
           dy = target[1] - start[1],
           len = Math.hypot(dx, dy) || 1;
-        const sign = Math.sin(seed + k * 19.37),
-          scatter = (sign * 0.0425) / Math.sqrt(k);
+        const source = j.points[k - 1],
+          destination = j.points[k];
+        const direction = bendDirection(source);
+        // A stable move hash varies magnitude; the search cycle cannot flip bends.
+        const hash =
+          [...(source + destination + id + k)].reduce(
+            (h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619),
+            2166136261,
+          ) >>> 0;
+        const sign = direction * (hash / 4294967295);
+        const jitter = Math.sin(hash + path.seed * 13.37);
+        const scatter = (jitter * options.scatter) / Math.pow(k, options.taper);
+        const bend =
+          direction *
+          (options.curvature + Math.abs(sign) * options.bendVariation);
         // Junction jitter is perpendicular, shared by adjacent segments.
         const end = [
           target[0] - (dy / len) * scatter,
           target[1] + (dx / len) * scatter,
         ];
         const control = [
-          (start[0] + end[0]) / 2 -
-            (dy / len) * (0.035 + Math.abs(sign) * 0.045) * Math.sign(sign),
-          (start[1] + end[1]) / 2 +
-            (dx / len) * (0.035 + Math.abs(sign) * 0.045) * Math.sign(sign),
+          (start[0] + end[0]) / 2 - (dy / len) * bend,
+          (start[1] + end[1]) / 2 + (dx / len) * bend,
         ];
         const settings = selected
           ? this.settings.selected
           : this.settings.forest;
+        const prefix = selected
+          ? "selected"
+          : j.color === "w"
+            ? "white"
+            : "black";
+        const rgb = (hex) =>
+          [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+        const first = rgb(options[prefix + "Start"]),
+          last = rgb(options[prefix + "End"]);
+        const tint = rgb(
+          options[selected ? "selectedTintColor" : "forestTintColor"],
+        );
+        const strength = options[selected ? "selectedTint" : "forestTint"];
         const color = (t) =>
-          settings.tint ||
-          (selected
-            ? [0.08 + 0.12 * t, 0.42 + 0.18 * t, 0.16 + 0.1 * t]
-            : j.color === "w"
-              ? [0.025 + 0.08 * t, 0.24 + 0.16 * t, 0.35 + 0.15 * t]
-              : [0.48 + 0.15 * t, 0.12 + 0.12 * t, 0.045 + 0.08 * t]);
-        // Keep strokes equally legible on standard and high-DPI displays.
+          first.map(
+            (v, i) =>
+              (v + (last[i] - v) * t) * (1 - strength) + tint[i] * strength,
+          );
+        // Stroke width remains in CSS pixels on high-DPI displays.
         const width =
-            1.4 / this.canvas.getBoundingClientRect().width / Math.sqrt(k),
+            options.width /
+            this.canvas.getBoundingClientRect().width /
+            Math.pow(k, options.taper),
           alpha = settings.strokeOpacity;
         const bez = (t) => {
           const a = 1 - t;
@@ -300,9 +332,9 @@ export class Forest {
             a * a * start[1] + 2 * a * t * control[1] + t * t * end[1],
           ];
         };
-        for (let step = 0; step < 16; step++) {
-          const t = step / 16,
-            u = (step + 1) / 16,
+        for (let step = 0; step < options.segments; step++) {
+          const t = step / options.segments,
+            u = (step + 1) / options.segments,
             a = bez(t),
             b = bez(u),
             vx = b[0] - a[0],
@@ -335,6 +367,28 @@ export class Forest {
   paint(dt) {
     const g = this.gl;
     if (!this.layers.length) return;
+    const previousSearch = JSON.stringify(this.searchOptions());
+    this.options = this.tuning.read();
+    const options = this.options;
+    this.settings.forest.strokeOpacity = options.forestStroke;
+    this.settings.forest.fade = options.forestFade;
+    this.settings.selected.strokeOpacity = options.selectedStroke;
+    this.settings.selected.fade = options.selectedFade;
+    this.settings.selected.canvasOpacity = options.selectedOpacity / 100;
+    if (previousSearch !== JSON.stringify(this.searchOptions()) && this.fen) {
+      this.id++;
+      this.queue = [];
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(
+        () =>
+          this.worker.postMessage({
+            id: this.id,
+            fen: this.fen,
+            ...this.searchOptions(),
+          }),
+        250,
+      );
+    }
     const orientation = this.ground.state.orientation;
     if (orientation !== this.orientation) {
       this.orientation = orientation;
@@ -344,13 +398,13 @@ export class Forest {
     this.selected = this.ground.state.selected || null;
     const enabled = document.querySelector("#forest-enabled").checked;
     this.canvas.style.visibility = enabled ? "visible" : "hidden";
-    const rate = Number(document.querySelector("#forest-rate").value);
+    const rate = options.rate;
     this.credit = Math.min((this.credit || 0) + dt * rate, 4);
     const paths = enabled ? this.queue.splice(0, Math.floor(this.credit)) : [];
     this.credit -= paths.length;
     this.stats.queued = this.queue.length;
     g.viewport(0, 0, this.canvas.width, this.canvas.height);
-    const fade = Number(document.querySelector("#forest-fade").value);
+    const fade = options.fade;
     for (let layer = 0; layer < 2; layer++) {
       const pair = this.layers[layer];
       g.disable(g.BLEND);
@@ -408,7 +462,7 @@ export class Forest {
     );
     g.uniform1f(
       g.getUniformLocation(this.composite, "opacity"),
-      Number(document.querySelector("#forest-opacity").value) / 100,
+      options.forestOpacity / 100,
     );
     g.drawArrays(g.TRIANGLES, 0, 3);
   }

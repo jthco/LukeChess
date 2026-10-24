@@ -6,18 +6,29 @@ tap-to-move both remain enabled.
 
 Serve this directory with `python3 -m http.server 8123`. No build or backend is
 required. The opening forest starts on load; select a piece to highlight its
-paths. The Living forest controls adjust visibility, forest canvas opacity,
-fade speed, and the rate of complete search paths painted. Selected canvas
-opacity defaults to 100%, unselected to 75%. Default forest fading has a roughly 69-second half-life (selected strokes about
-50 seconds), and the fade slider can slow fading further. WebGL2 is required for the forest;
-chess remains playable without it.
+paths. Expand the Living forest tuning groups to adjust:
+
+- Growth: paint rate, fade speed, explorer depth, search burst and rest time.
+- Geometry: curvature, bend variation, perpendicular scatter, depth taper,
+  stroke width in CSS pixels, and curve smoothness.
+- Independent forest/selected layers: canvas opacity, stroke opacity, fade
+  multiplier, and tint strength.
+- Colours: White, Black and selected gradient endpoints, plus each layer's tint.
+
+Every fader displays its value. Changes affect new strokes while existing
+feedback fades naturally; canvas opacity and fading affect existing marks too.
+Settings persist in localStorage and Reset tuning restores the defaults.
+Selected canvas opacity defaults to 100%, unselected to 75%. Default fading
+has a roughly 69-second half-life (selected about 50 seconds); setting fade
+speed or a layer's fade multiplier to zero retains that layer indefinitely.
+WebGL2 is required for the forest; chess remains playable without it.
 
 ## Implementation
 
 - `explorer-worker.js` instruments Garbochess-JS's successful legal make/unmake
   traversal. Events contain actual explored sequences, not principal variations.
   Null-move pruning is disabled in the vendored engine. Rejected branches are
-  included. Each burst restarts from the current FEN, searches up to five plies
+  included. Each burst restarts from the current FEN, defaults to searching up to five plies
   (plus check extensions/quiescence), and is bounded by a time/node/depth budget.
   A bounded sample of visited paths is sent to the renderer. Worker errors are
   reported without stopping chess. Checkmate metadata is reserved as unknown;
@@ -28,10 +39,14 @@ chess remains playable without it.
   depth-tapered perpendicular scatter, and palette interpolation are artistic.
 - Two layers each use ping-pong WebGL2 feedback textures. Each frame fades the
   previous image and adds a limited number of complete paths. Stroke opacity is
-  separate from compositing opacity. `game.forest.settings` exposes independent
-  selected/unselected stroke opacity, fade multiplier, and optional RGB tint;
-  selected canvas opacity is also adjustable there. The visible sliders provide
-  a small initial control set, not a preset editor.
+  separate from compositing opacity. `forest-tuning.js` defines the controls,
+  validated local settings, live values, and reset behavior. Search tuning is
+  debounced and generation-tagged; safety caps still bound node/path work.
+- Curvature direction is deterministic: even `(x+y)` squares bend one way,
+  odd squares the other, using zero-based source-square coordinates. A stable
+  source/destination/piece/depth hash varies bend magnitude, independently of
+  search cycle and board orientation. Scatter can vary between bursts; setting
+  scatter to zero makes repeated move paths geometrically identical.
 - Position changes clear old feedback/queues and invalidate messages by position
   generation. Board flips clear orientation-dependent feedback. Selection routes
   new strokes without restarting search; old strokes fade naturally. Playback
@@ -51,7 +66,8 @@ Run `npm ci`, start the static server in the repository root, then run
 `/usr/bin/chromium`, override with `CHROME_PATH`). It checks painted opening
 pixels, sampled legal search paths in special-move positions, selected-tree
 routing, tap and drag gameplay with Stockfish replies, Undo, board flipping,
-resize, real feedback fading, and gameplay without WebGL2.
+resize, real feedback fading, tuning effects/persistence/reset, deterministic
+curvature, and gameplay without WebGL2.
 
 ## Explorer attribution
 

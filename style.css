@@ -350,3 +350,11 @@ a:focus-visible {
 #forest-status { margin: 4px 0 0; font-size: .75rem; line-height: 1.4; color: #596451; }
 
 #board-stage { position: relative; width: var(--board-size); height: var(--board-size); }
+#forest-tuning details { border-top: 1px solid #d6ddcf; padding-top: 8px; margin-top: 8px; }
+#forest-tuning summary { cursor: pointer; font-size: .85rem; margin-bottom: 10px; color: #49643c; }
+#forest-tuning label span { display: flex; justify-content: space-between; gap: 8px; }
+#forest-tuning output { font-variant-numeric: tabular-nums; color: #49643c; }
+#forest-tuning input[type="range"] { width: 100%; margin: 0; accent-color: #49643c; }
+#forest-tuning .forest-color { flex-direction: row; align-items: center; justify-content: space-between; }
+#forest-tuning input[type="color"] { width: 40px; height: 26px; padding: 0; border: 0; background: none; }
+#forest-tuning button { cursor: pointer; margin: 8px 0; padding: 5px 10px; }

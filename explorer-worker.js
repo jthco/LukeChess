@@ -74,10 +74,10 @@ function explore() {
     postMessage({ id: position.id, error });
     return;
   }
-  g_timeout = 65;
+  g_timeout = position.burstMs || 65;
   running = true;
   try {
-    Search(null, 5, null);
+    Search(null, position.searchDepth || 5, null);
   } catch (e) {
     if (e !== LIMIT) {
       postMessage({ id: position.id, error: String(e) });
@@ -94,7 +94,7 @@ function explore() {
     paths: batch,
   });
   // Yield for cancellation/position messages and keep CPU use bounded.
-  timer = setTimeout(explore, 90);
+  timer = setTimeout(explore, position.intervalMs || 90);
 }
 self.onmessage = ({ data }) => {
   clearTimeout(timer);

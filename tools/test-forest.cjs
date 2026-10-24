@@ -202,6 +202,59 @@ const puppeteer = require("puppeteer-core");
       ),
       "none",
     );
+    // Tuning must affect real geometry and persist through a reload.
+    const tuning = await page.evaluate(async () => {
+      const set = (key, value) => {
+        const input = document.querySelector("#forest-" + key);
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      };
+      set("scatter", 0);
+      set("curvature", 0.08);
+      set("bendVariation", 0.02);
+      set("width", 2);
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      const f = game.forest;
+      const path = {
+        seed: 1,
+        moves: [
+          { from: "e2", to: "e4", piece: "p", color: "w", capture: false },
+        ],
+      };
+      // Use the actual root board for this rendering-only geometry comparison.
+      const fen = f.fen;
+      f.fen = new game.chess.constructor().fen();
+      f.selected = null;
+      const a = f.vertices(path, false),
+        b = f.vertices({ ...path, seed: 100 }, false);
+      set("curvature", 0);
+      set("bendVariation", 0);
+      await new Promise(requestAnimationFrame);
+      await new Promise(requestAnimationFrame);
+      const straight = f.vertices(path, false);
+      f.fen = fen;
+      const { bendDirection } = await import("./forest-tuning.js");
+      return {
+        same: JSON.stringify(a) === JSON.stringify(b),
+        changed: JSON.stringify(a) !== JSON.stringify(straight),
+        parity: bendDirection("e2") === -bendDirection("f2"),
+        width: document.querySelector("#forest-width").value,
+        output: document.querySelector('output[for="forest-width"]').value,
+      };
+    });
+    assert(
+      tuning.same,
+      "Curvature must not vary with search cycle when scatter is zero",
+    );
+    assert(tuning.changed, "Curvature fader must change rendered geometry");
+    assert(tuning.parity);
+    assert.equal(tuning.output, "2");
+    await page.reload();
+    await page.waitForFunction(() => window.game);
+    assert.equal(await page.$eval("#forest-width", (e) => e.value), "2");
+    await page.click("#forest-tuning button");
+    assert.equal(await page.$eval("#forest-width", (e) => e.value), "1.4");
     const fallback = await browser.newPage();
     await fallback.evaluateOnNewDocument(() => {
       const original = HTMLCanvasElement.prototype.getContext;
