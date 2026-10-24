@@ -10,7 +10,8 @@ paths. Expand the Living forest tuning groups to adjust:
 
 - Growth: paint rate, fade speed, explorer depth, search burst and rest time.
 - Geometry: curvature, bend variation, perpendicular scatter, depth taper,
-  stroke width in CSS pixels, and curve smoothness.
+  stroke width in CSS pixels, tip-width ratio, lookahead fading, capture-circle
+  size, and curve smoothness.
 - Independent forest/selected layers: canvas opacity, stroke opacity, fade
   multiplier, and tint strength.
 - Colours: White, Black and selected gradient endpoints, plus each layer's tint.
@@ -47,6 +48,14 @@ WebGL2 is required for the forest; chess remains playable without it.
   source/destination/piece/depth hash varies bend magnitude, independently of
   search cycle and board orientation. Scatter can vary between bursts; setting
   scatter to zero makes repeated move paths geometrically identical.
+- Strokes taper along the direction of travel, wide at the origin and narrow
+  at the tip. Alpha is multiplied by exp(-lookaheadFading * (ply - 1)), using
+  actual search ply rather than the number of times that piece moved. Width
+  and scatter also taper with actual search depth.
+- A piece journey ending in a capture is red along its entire length, overriding
+  normal palettes and tints. A red ring is drawn at the actual capture square,
+  independently of endpoint scatter; en passant uses the capturing pawn's
+  destination. These marks share their layer's accumulation and fading.
 - Position changes clear old feedback/queues and invalidate messages by position
   generation. Board flips clear orientation-dependent feedback. Selection routes
   new strokes without restarting search; old strokes fade naturally. Playback
@@ -57,7 +66,7 @@ The engine uses bounded synchronous bursts in a dedicated worker, yielding
 between bursts. This first version deliberately re-explores a shallow tree;
 search strength, art quality, CPU use, and device performance need further
 iteration. No mobile/90 Hz hardware performance claim has been made. Tentative
-moves, Commit, special-event effects, presets, and Hashtag64 are later phases.
+moves, Commit, check/mate effects, presets, and Hashtag64 are later phases.
 
 ## Validation
 
@@ -67,7 +76,8 @@ Run `npm ci`, start the static server in the repository root, then run
 pixels, sampled legal search paths in special-move positions, selected-tree
 routing, tap and drag gameplay with Stockfish replies, Undo, board flipping,
 resize, real feedback fading, tuning effects/persistence/reset, deterministic
-curvature, and gameplay without WebGL2.
+curvature, source-to-tip taper, generation opacity, capture-path colour/circle
+placement, and gameplay without WebGL2.
 
 ## Explorer attribution
 

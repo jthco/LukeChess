@@ -231,7 +231,7 @@ export class Forest {
         }
       }
     });
-    for (const m of path.moves) {
+    for (const [ply, m] of path.moves.entries()) {
       const id = ids.get(m.from);
       if (!id) continue;
       const occupied = ids.has(m.to);
@@ -248,20 +248,36 @@ export class Forest {
           ids.set(to, rook);
           let r = journeys.get(rook);
           if (!r) {
-            r = { color: m.color, points: [from], checks: [] };
+            r = {
+              color: m.color,
+              points: [from],
+              checks: [],
+              depths: [],
+              captures: [],
+            };
             journeys.set(rook, r);
           }
           r.points.push(to);
           r.checks.push(m.check);
+          r.depths.push(ply + 1);
+          r.captures.push(false);
         }
       }
       let j = journeys.get(id);
       if (!j) {
-        j = { color: m.color, points: [m.from], checks: [] };
+        j = {
+          color: m.color,
+          points: [m.from],
+          checks: [],
+          depths: [],
+          captures: [],
+        };
         journeys.set(id, j);
       }
       j.points.push(m.to);
       j.checks.push(m.check);
+      j.depths.push(ply + 1);
+      j.captures.push(!!m.capture);
     }
     const out = [];
     for (const [id, j] of journeys) {
@@ -269,6 +285,7 @@ export class Forest {
       const pts = j.points.map((s) => this.point(s));
       let start = pts[0];
       const options = this.options;
+      const captureEnding = j.captures.at(-1);
       for (let k = 1; k < pts.length; k++) {
         const target = pts[k],
           dx = target[0] - start[0],
@@ -285,7 +302,8 @@ export class Forest {
           ) >>> 0;
         const sign = direction * (hash / 4294967295);
         const jitter = Math.sin(hash + path.seed * 13.37);
-        const scatter = (jitter * options.scatter) / Math.pow(k, options.taper);
+        const scatter =
+          (jitter * options.scatter) / Math.pow(j.depths[k - 1], options.taper);
         const bend =
           direction *
           (options.curvature + Math.abs(sign) * options.bendVariation);
@@ -315,16 +333,20 @@ export class Forest {
         );
         const strength = options[selected ? "selectedTint" : "forestTint"];
         const color = (t) =>
-          first.map(
-            (v, i) =>
-              (v + (last[i] - v) * t) * (1 - strength) + tint[i] * strength,
-          );
+          captureEnding
+            ? [0.88, 0.025, 0.035]
+            : first.map(
+                (v, i) =>
+                  (v + (last[i] - v) * t) * (1 - strength) + tint[i] * strength,
+              );
         // Stroke width remains in CSS pixels on high-DPI displays.
         const width =
             options.width /
             this.canvas.getBoundingClientRect().width /
-            Math.pow(k, options.taper),
-          alpha = settings.strokeOpacity;
+            Math.pow(j.depths[k - 1], options.taper),
+          alpha =
+            settings.strokeOpacity *
+            Math.exp(-options.generationFade * (j.depths[k - 1] - 1));
         const bez = (t) => {
           const a = 1 - t;
           return [
@@ -344,22 +366,65 @@ export class Forest {
             ny = (vx / vl) * width;
           const ca = color((sign + 1) / 4 + t / 2),
             cb = color((sign + 1) / 4 + u / 2);
-          const v = (p, side, c) => [
-            p[0] + nx * side,
-            p[1] + ny * side,
+          const v = (p, side, c, progress) => [
+            p[0] +
+              nx *
+                side *
+                (1 -
+                  ((1 - options.tipWidth) * (k - 1 + progress)) /
+                    (pts.length - 1)),
+            p[1] +
+              ny *
+                side *
+                (1 -
+                  ((1 - options.tipWidth) * (k - 1 + progress)) /
+                    (pts.length - 1)),
             ...c,
             alpha,
           ];
           out.push(
-            ...v(a, -1, ca),
-            ...v(a, 1, ca),
-            ...v(b, 1, cb),
-            ...v(a, -1, ca),
-            ...v(b, 1, cb),
-            ...v(b, -1, cb),
+            ...v(a, -1, ca, t),
+            ...v(a, 1, ca, t),
+            ...v(b, 1, cb, u),
+            ...v(a, -1, ca, t),
+            ...v(b, 1, cb, u),
+            ...v(b, -1, cb, u),
           );
         }
         start = end;
+      }
+      if (captureEnding && options.captureRadius > 0) {
+        // Capture destination is the real square centre, not the scattered endpoint.
+        const centre = this.point(j.points.at(-1)),
+          radius = options.captureRadius / 4;
+        const settings = selected
+          ? this.settings.selected
+          : this.settings.forest;
+        const alpha =
+          settings.strokeOpacity *
+          Math.exp(-options.generationFade * (j.depths.at(-1) - 1));
+        const halfWidth =
+          options.width / this.canvas.getBoundingClientRect().width;
+        const vertex = (angle, offset) => [
+          centre[0] + Math.cos(angle) * (radius + offset),
+          centre[1] + Math.sin(angle) * (radius + offset),
+          0.88,
+          0.025,
+          0.035,
+          alpha,
+        ];
+        for (let i = 0; i < 48; i++) {
+          const a = (i * Math.PI) / 24,
+            b = ((i + 1) * Math.PI) / 24;
+          out.push(
+            ...vertex(a, -halfWidth),
+            ...vertex(a, halfWidth),
+            ...vertex(b, halfWidth),
+            ...vertex(a, -halfWidth),
+            ...vertex(b, halfWidth),
+            ...vertex(b, -halfWidth),
+          );
+        }
       }
     }
     return out;

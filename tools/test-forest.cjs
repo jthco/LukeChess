@@ -202,6 +202,94 @@ const puppeteer = require("puppeteer-core");
       ),
       "none",
     );
+    const appearance = await page.evaluate(() => {
+      const f = game.forest,
+        fen = f.fen,
+        options = f.options,
+        selected = f.selected;
+      f.fen = new game.chess.constructor().fen();
+      f.selected = null;
+      f.options = { ...options, scatter: 0, curvature: 0, bendVariation: 0 };
+      const moves = [
+        { from: "e2", to: "e4", piece: "p", color: "w", capture: false },
+        { from: "d7", to: "d5", piece: "p", color: "b", capture: false },
+        { from: "e4", to: "d5", piece: "p", color: "w", capture: true },
+      ];
+      const chunk = options.segments * 36;
+      const ordinary = f.vertices(
+        {
+          seed: 0,
+          moves: [
+            moves[0],
+            moves[1],
+            { from: "g1", to: "f3", piece: "n", color: "w", capture: false },
+          ],
+        },
+        false,
+      );
+      const alphas = [
+        ordinary[5],
+        ordinary[chunk + 5],
+        ordinary[2 * chunk + 5],
+      ];
+      const last = chunk - 36;
+      const startWidth = Math.hypot(
+        ordinary[0] - ordinary[6],
+        ordinary[1] - ordinary[7],
+      );
+      const endWidth = Math.hypot(
+        ordinary[last + 12] - ordinary[last + 30],
+        ordinary[last + 13] - ordinary[last + 31],
+      );
+      f.options.captureRadius = 0;
+      const noRing = f.vertices({ seed: 0, moves }, false);
+      // Both moves of the capturing pawn's entire journey must be red.
+      let red = true;
+      for (let i = 0; i < chunk * 2; i += 6)
+        red &&=
+          noRing[i + 2] > 0.8 && noRing[i + 3] < 0.05 && noRing[i + 4] < 0.05;
+      f.options.captureRadius = 0.22;
+      const ring = f.vertices({ seed: 0, moves }, false);
+      const destination = f.point("d5");
+      let sx = 0,
+        sy = 0,
+        count = 0;
+      // Ring is appended after this pawn's two segments, before the black path.
+      for (let i = chunk * 2; i < chunk * 2 + 48 * 36; i += 6) {
+        sx += ring[i];
+        sy += ring[i + 1];
+        count++;
+      }
+      f.fen = fen;
+      f.options = options;
+      f.selected = selected;
+      return {
+        alphas,
+        startWidth,
+        endWidth,
+        red,
+        ringAdded: ring.length - noRing.length,
+        centreError: Math.hypot(
+          sx / count - destination[0],
+          sy / count - destination[1],
+        ),
+      };
+    });
+    assert(
+      appearance.startWidth > appearance.endWidth * 2,
+      "Stroke must be widest at its source",
+    );
+    assert(
+      appearance.alphas[0] > appearance.alphas[1] &&
+        appearance.alphas[1] > appearance.alphas[2],
+      "Actual search generations must fade progressively",
+    );
+    assert(appearance.red, "Entire capture-ending journey must be red");
+    assert.equal(appearance.ringAdded, 48 * 36);
+    assert(
+      appearance.centreError < 1e-6,
+      "Capture ring must centre on the real destination",
+    );
     // Tuning must affect real geometry and persist through a reload.
     const tuning = await page.evaluate(async () => {
       const set = (key, value) => {
