@@ -301,10 +301,54 @@ const puppeteer = require("puppeteer-core");
         ex / (48 * 6) - epCentre[0],
         ey / (48 * 6) - epCentre[1],
       );
+      // A bishop's capture marker must survive later quiet moves in that branch.
+      f.fen = "4k3/5p2/8/8/2B5/8/8/4K3 w - - 0 1";
+      const legal = new game.chess.constructor(f.fen),
+        bishopMoves = [];
+      for (const san of ["Bxf7+", "Kd8", "Be6"]) {
+        const m = legal.move(san);
+        bishopMoves.push({
+          from: m.from,
+          to: m.to,
+          piece: m.piece,
+          color: m.color,
+          capture: !!m.captured,
+        });
+      }
+      const bishop = f.vertices({ seed: 0, moves: bishopMoves }, false);
+      const bishopGreen =
+        bishop[2 * chunk + 3] > 0.6 && bishop[2 * chunk + 2] < 0.1;
+      f.fen = new game.chess.constructor().fen();
+      f.options.scatter = 0.1;
+      const single = {
+        seed: 1,
+        moves: [
+          { from: "e2", to: "e4", piece: "p", color: "w", capture: false },
+        ],
+      };
+      const fanA = f.vertices(single, false),
+        fanB = f.vertices({ ...single, seed: 2 }, false);
+      const tip = (v) => [
+        (v[chunk - 36 + 12] + v[chunk - 36 + 30]) / 2,
+        (v[chunk - 36 + 13] + v[chunk - 36 + 31]) / 2,
+      ];
+      const ta = tip(fanA),
+        tb = tip(fanB),
+        end = f.point("e4");
+      const tipError =
+        Math.hypot(ta[0] - end[0], ta[1] - end[1]) +
+        Math.hypot(tb[0] - end[0], tb[1] - end[1]);
+      const sourceSpread = Math.hypot(
+        (fanA[0] + fanA[6] - fanB[0] - fanB[6]) / 2,
+        (fanA[1] + fanA[7] - fanB[1] - fanB[7]) / 2,
+      );
       f.fen = fen;
       f.options = options;
       f.selected = selected;
       return {
+        bishopGreen,
+        tipError,
+        sourceSpread,
         deepWidth,
         directWidth,
         ellipseRatio: rx / ry,
@@ -348,6 +392,18 @@ const puppeteer = require("puppeteer-core");
     assert(
       appearance.epError < 1e-6,
       "En passant must mark the captured pawn, not the empty landing square",
+    );
+    assert(
+      appearance.bishopGreen,
+      "Bishop capturer must remain green when search continues after its capture",
+    );
+    assert(
+      appearance.tipError < 1e-6,
+      "Accumulated tips must converge on the destination",
+    );
+    assert(
+      appearance.sourceSpread > 0.001,
+      "Scatter must broaden the source rather than the destination",
     );
     // Tuning must affect real geometry and persist through a reload.
     const tuning = await page.evaluate(async () => {

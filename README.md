@@ -49,10 +49,12 @@ WebGL2 is required for the forest; chess remains playable without it.
   search cycle and board orientation. Scatter can vary between bursts; setting
   scatter to zero makes repeated move paths geometrically identical.
 - Strokes taper along the direction of travel, wide at the origin and narrow
-  at the tip. Alpha is multiplied by exp(-lookaheadFading * (ply - 1)), using
+  at the tip. Scatter spreads the source and decreases toward a fixed final
+  destination, so accumulated strokes also point in the direction of travel.
+  Alpha is multiplied by exp(-lookaheadFading * (ply - 1)), using
   actual search ply rather than the number of times that piece moved. Width
   and scatter also taper with actual search depth.
-- A piece journey ending in a capture is red along its entire length, overriding
+- The prefix of a piece journey through its last capture is red, overriding
   normal palettes and tints. The capturing piece gets a green circle and its
   target a red ellipse, both below the sprites at their current root-position
   squares. The ellipse has the same height as the circle and twice the width,
@@ -60,7 +62,10 @@ WebGL2 is required for the forest; chess remains playable without it.
   identities also locate a target that moves later, or an en passant victim.
   Marker stroke width defaults to 12 CSS pixels divided by search ply, so
   immediate captures are thickest; width, depth thinning, and radius have faders.
-  These marks share their layer's accumulation and fading.
+  Every explored capture contributes markers, even if that piece later makes
+  a quiet move in the same branch. A piece may be both a capturer and a target
+  across different variations. These marks share their layer's accumulation
+  and fading.
 - Position changes clear old feedback/queues and invalidate messages by position
   generation. Board flips clear orientation-dependent feedback. Selection routes
   new strokes without restarting search; old strokes fade naturally. Playback

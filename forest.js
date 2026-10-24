@@ -257,6 +257,7 @@ export class Forest {
               checks: [],
               depths: [],
               captures: [],
+              captureEvents: [],
             };
             journeys.set(rook, r);
           }
@@ -274,6 +275,7 @@ export class Forest {
           checks: [],
           depths: [],
           captures: [],
+          captureEvents: [],
         };
         journeys.set(id, j);
       }
@@ -281,7 +283,7 @@ export class Forest {
       j.checks.push(m.check);
       j.depths.push(ply + 1);
       j.captures.push(!!m.capture);
-      if (m.capture) j.captureTarget = victimId;
+      if (m.capture) j.captureEvents.push({ target: victimId, depth: ply + 1 });
     }
     const out = [];
     for (const [id, j] of journeys) {
@@ -289,7 +291,7 @@ export class Forest {
       const pts = j.points.map((s) => this.point(s));
       let start = pts[0];
       const options = this.options;
-      const captureEnding = j.captures.at(-1);
+      const lastCapture = j.captures.lastIndexOf(true) + 1;
       for (let k = 1; k < pts.length; k++) {
         const target = pts[k],
           dx = target[0] - start[0],
@@ -306,8 +308,16 @@ export class Forest {
           ) >>> 0;
         const sign = direction * (hash / 4294967295);
         const jitter = Math.sin(hash + path.seed * 13.37);
-        const scatter =
+        const spread =
           (jitter * options.scatter) / Math.pow(j.depths[k - 1], options.taper);
+        // Scatter the broad source, not the terminal tip: accumulated strokes
+        // must converge on their destination instead of forming a reversed fan.
+        if (k === 1)
+          start = [
+            start[0] - (dy / len) * spread,
+            start[1] + (dx / len) * spread,
+          ];
+        const scatter = spread * (1 - k / (pts.length - 1));
         const bend =
           direction *
           (options.curvature + Math.abs(sign) * options.bendVariation);
@@ -337,7 +347,7 @@ export class Forest {
         );
         const strength = options[selected ? "selectedTint" : "forestTint"];
         const color = (t) =>
-          captureEnding
+          k <= lastCapture
             ? [0.88, 0.025, 0.035]
             : first.map(
                 (v, i) =>
@@ -397,57 +407,58 @@ export class Forest {
         }
         start = end;
       }
-      if (captureEnding && options.captureRadius > 0) {
-        const radius = options.captureRadius / 4;
-        const settings = selected
-          ? this.settings.selected
-          : this.settings.forest;
-        const depth = j.depths.at(-1);
-        const alpha =
-          settings.strokeOpacity *
-          Math.exp(-options.generationFade * (depth - 1));
-        const halfWidth = Math.min(
-          radius * 0.8,
-          options.captureWidth /
-            this.canvas.getBoundingClientRect().width /
-            Math.pow(depth, options.captureTaper),
-        );
-        const ring = (centre, rx, ry, color) => {
-          const vertex = (angle, side) => {
-            const x = Math.cos(angle),
-              y = Math.sin(angle),
-              nx = x / rx,
-              ny = y / ry,
-              len = Math.hypot(nx, ny);
-            return [
-              centre[0] + x * rx + (nx / len) * halfWidth * side,
-              centre[1] + y * ry + (ny / len) * halfWidth * side,
-              ...color,
-              alpha,
-            ];
+      if (options.captureRadius > 0)
+        for (const capture of j.captureEvents) {
+          const radius = options.captureRadius / 4;
+          const settings = selected
+            ? this.settings.selected
+            : this.settings.forest;
+          const depth = capture.depth;
+          const alpha =
+            settings.strokeOpacity *
+            Math.exp(-options.generationFade * (depth - 1));
+          const halfWidth = Math.min(
+            radius * 0.8,
+            options.captureWidth /
+              this.canvas.getBoundingClientRect().width /
+              Math.pow(depth, options.captureTaper),
+          );
+          const ring = (centre, rx, ry, color) => {
+            const vertex = (angle, side) => {
+              const x = Math.cos(angle),
+                y = Math.sin(angle),
+                nx = x / rx,
+                ny = y / ry,
+                len = Math.hypot(nx, ny);
+              return [
+                centre[0] + x * rx + (nx / len) * halfWidth * side,
+                centre[1] + y * ry + (ny / len) * halfWidth * side,
+                ...color,
+                alpha,
+              ];
+            };
+            for (let i = 0; i < 48; i++) {
+              const a = (i * Math.PI) / 24,
+                b = ((i + 1) * Math.PI) / 24;
+              out.push(
+                ...vertex(a, -1),
+                ...vertex(a, 1),
+                ...vertex(b, 1),
+                ...vertex(a, -1),
+                ...vertex(b, 1),
+                ...vertex(b, -1),
+              );
+            }
           };
-          for (let i = 0; i < 48; i++) {
-            const a = (i * Math.PI) / 24,
-              b = ((i + 1) * Math.PI) / 24;
-            out.push(
-              ...vertex(a, -1),
-              ...vertex(a, 1),
-              ...vertex(b, 1),
-              ...vertex(a, -1),
-              ...vertex(b, 1),
-              ...vertex(b, -1),
-            );
+          // Root identities locate the pieces on the current board, even if they
+          // move inside the future variation. The overlay stays below piece sprites.
+          ring(this.point(id), radius, radius, [0.04, 0.65, 0.12]);
+          if (capture.target) {
+            const centre = this.point(capture.target);
+            centre[1] -= 1 / 16;
+            ring(centre, radius * 2, radius, [0.88, 0.025, 0.035]);
           }
-        };
-        // Root identities locate the pieces on the current board, even if they
-        // move inside the future variation. The overlay stays below piece sprites.
-        ring(this.point(id), radius, radius, [0.04, 0.65, 0.12]);
-        if (j.captureTarget) {
-          const centre = this.point(j.captureTarget);
-          centre[1] -= 1 / 16;
-          ring(centre, radius * 2, radius, [0.88, 0.025, 0.035]);
         }
-      }
     }
     return out;
   }
