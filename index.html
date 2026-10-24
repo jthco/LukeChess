@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Quiet Chess</title>
+  <title>LukeChess</title>
   <meta name="description" content="Play chess against Stockfish and analyse any game — no account, no upload, no record. The engine runs entirely in your browser.">
   <meta property="og:title" content="Quiet Chess — play and analyse, entirely in your browser">
   <meta property="og:description" content="Play Stockfish, train endgames, and get full game reviews (accuracy, blunders, best moves) with no account, no upload, no record. Everything runs locally.">
@@ -32,7 +32,7 @@
         <button id="hint" disabled>Get a hint</button>
         <button id="undo" disabled>Undo</button>
       </div>
-      <div id="board" class="cg-wrap"></div>
+      <div id="board-stage"><div id="board" class="cg-wrap"></div></div>
       <div id="promo-overlay" class="hidden">
         <div class="promo-box">
           <button data-piece="q">♛</button>
@@ -49,7 +49,7 @@
     </div>
 
     <aside class="panel">
-      <h1>Quiet Chess</h1>
+      <h1>LukeChess</h1>
       <p id="status">Loading engine…</p>
 
       <div class="controls">
@@ -79,6 +79,14 @@
         </div>
       </div>
 
+      <fieldset class="forest-controls">
+        <legend>Living forest</legend>
+        <label class="forest-toggle"><input id="forest-enabled" type="checkbox" checked> Show exploration</label>
+        <label>Forest opacity <input id="forest-opacity" type="range" min="0" max="100" value="30"></label>
+        <label>Fade speed <input id="forest-fade" type="range" min="0.05" max="1" step="0.05" value="0.15"></label>
+        <label>Paths per second <input id="forest-rate" type="range" min="2" max="60" value="24"></label>
+        <p id="forest-status" role="status">Starting the forest…</p>
+      </fieldset>
       <ol id="moves"></ol>
       <input id="pgn-input" type="text" placeholder="Paste a game (PGN), press Enter" spellcheck="false" autocomplete="off">
       <div class="buttons">

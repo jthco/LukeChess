@@ -1,3 +1,67 @@
+# LukeChess — first forest milestone
+
+LukeChess extends Quiet Chess with a living visualization of real JavaScript
+chess search. Stockfish 18 remains the playing opponent. Desktop dragging and
+tap-to-move both remain enabled.
+
+Serve this directory with `python3 -m http.server 8123`. No build or backend is
+required. The opening forest starts on load; select a piece to highlight its
+paths. The Living forest controls adjust visibility, forest canvas opacity,
+fade speed, and the rate of complete search paths painted. Selected canvas
+opacity defaults to 100%, unselected to 30%. WebGL2 is required for the forest;
+chess remains playable without it.
+
+## Implementation
+
+- `explorer-worker.js` instruments Garbochess-JS's successful legal make/unmake
+  traversal. Events contain actual explored sequences, not principal variations.
+  Null-move pruning is disabled in the vendored engine. Rejected branches are
+  included. Each burst restarts from the current FEN, searches up to five plies
+  (plus check extensions/quiescence), and is bounded by a time/node/depth budget.
+  A bounded sample of visited paths is sent to the renderer. Worker errors are
+  reported without stopping chess. Checkmate metadata is reserved as unknown;
+  capture/check flags are independent.
+- `forest.js` tracks piece identities from the root position through each legal
+  variation, including promotions, captures, en passant, and castling. A piece's
+  successive visited squares form connected quadratic segments. Only curvature,
+  depth-tapered perpendicular scatter, and palette interpolation are artistic.
+- Two layers each use ping-pong WebGL2 feedback textures. Each frame fades the
+  previous image and adds a limited number of complete paths. Stroke opacity is
+  separate from compositing opacity. `game.forest.settings` exposes independent
+  selected/unselected stroke opacity, fade multiplier, and optional RGB tint;
+  selected canvas opacity is also adjustable there. The visible sliders provide
+  a small initial control set, not a preset editor.
+- Position changes clear old feedback/queues and invalidate messages by position
+  generation. Board flips clear orientation-dependent feedback. Selection routes
+  new strokes without restarting search; old strokes fade naturally. Playback
+  of past game positions also updates the explorer. The overlay cannot receive
+  pointer input and sits below the pieces.
+
+The engine uses bounded synchronous bursts in a dedicated worker, yielding
+between bursts. This first version deliberately re-explores a shallow tree;
+search strength, art quality, CPU use, and device performance need further
+iteration. No mobile/90 Hz hardware performance claim has been made. Tentative
+moves, Commit, special-event effects, presets, and Hashtag64 are later phases.
+
+## Validation
+
+Run `npm ci`, start the static server in the repository root, then run
+`node tools/test-forest.cjs`. This uses puppeteer-core and Chromium (default
+`/usr/bin/chromium`, override with `CHROME_PATH`). It checks painted opening
+pixels, sampled legal search paths in special-move positions, selected-tree
+routing, tap and drag gameplay with Stockfish replies, Undo, board flipping,
+resize, real feedback fading, and gameplay without WebGL2.
+
+## Explorer attribution
+
+Garbochess-JS by Gary Linscott is vendored in `vendor/garbochess/` under its BSD
+3-Clause licence; its notice is retained there. The sole engine source change
+is disabling the null-move/razoring block. Instrumentation lives in the separate
+worker adapter. LukeChess retains Quiet Chess's GPLv3 licence and existing
+component credits below.
+
+---
+
 # Quiet Chess
 
 **Analyse your games with no account, no upload, and no record.**

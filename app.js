@@ -1,3 +1,4 @@
+import { Forest } from './forest.js';
 import { Chessground } from './vendor/chessground.min.js';
 import { Chess } from './vendor/chess.js';
 
@@ -308,6 +309,7 @@ function gotoPly(ply) {
   if (!analysis) return;
   analysis.viewPly = ply;
   const pos = new Chess(analysis.fens[ply]);
+  forest.setPosition(pos.fen());
   const mv = ply > 0 ? analysis.moves[ply - 1] : null;
   // at the final ply of an unfinished (loaded) game, play can continue
   const atLiveEnd = ply === analysis.fens.length - 1 && !chess.isGameOver();
@@ -400,6 +402,9 @@ const ground = Chessground(document.getElementById('board'), {
   premovable: { enabled: true },
 });
 
+const forest = new Forest(document.getElementById('board'), ground);
+forest.setPosition(chess.fen());
+
 // --- Helpers ----------------------------------------------------------------
 
 function fullColor(c) {
@@ -422,6 +427,7 @@ function toDests() {
 }
 
 function sync(lastMove) {
+  forest.setPosition(chess.fen());
   ground.set({
     fen: chess.fen(),
     turnColor: fullColor(chess.turn()),
@@ -891,6 +897,6 @@ if (linkedPgn && loadGameFromPgn(linkedPgn)) {
 
 // Console/debug handle
 window.game = {
-  chess, engine, move: applyUserMove, newGame, sounds, hint, startTrainer,
+  chess, engine, forest, move: applyUserMove, newGame, sounds, hint, startTrainer,
   gotoPly, loadGame: loadGameFromPgn, startFromFen, savePosition: savePositionLink,
 };
