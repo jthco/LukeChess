@@ -7,8 +7,8 @@ export class Forest {
     this.fen = "";
     this.selected = null;
     this.settings = {
-      forest: { strokeOpacity: 0.12, fade: 1, tint: null },
-      selected: { strokeOpacity: 0.2, canvasOpacity: 1, fade: 1.4, tint: null },
+      forest: { strokeOpacity: 0.28, fade: 1, tint: null },
+      selected: { strokeOpacity: 0.4, canvasOpacity: 1, fade: 1.4, tint: null },
     };
     this.stats = {
       batches: 0,
@@ -285,11 +285,13 @@ export class Forest {
         const color = (t) =>
           settings.tint ||
           (selected
-            ? [0.5 + 0.35 * t, 0.9, 0.52 + 0.35 * t]
+            ? [0.08 + 0.12 * t, 0.42 + 0.18 * t, 0.16 + 0.1 * t]
             : j.color === "w"
-              ? [0.25 + 0.45 * t, 0.6 + 0.3 * t, 0.8]
-              : [0.9, 0.38 + 0.3 * t, 0.2 + 0.25 * t]);
-        const width = 1.25 / this.canvas.width / Math.sqrt(k),
+              ? [0.025 + 0.08 * t, 0.24 + 0.16 * t, 0.35 + 0.15 * t]
+              : [0.48 + 0.15 * t, 0.12 + 0.12 * t, 0.045 + 0.08 * t]);
+        // Keep strokes equally legible on standard and high-DPI displays.
+        const width =
+            1.4 / this.canvas.getBoundingClientRect().width / Math.sqrt(k),
           alpha = settings.strokeOpacity;
         const bez = (t) => {
           const a = 1 - t;

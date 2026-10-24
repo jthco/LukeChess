@@ -8,7 +8,7 @@ Serve this directory with `python3 -m http.server 8123`. No build or backend is
 required. The opening forest starts on load; select a piece to highlight its
 paths. The Living forest controls adjust visibility, forest canvas opacity,
 fade speed, and the rate of complete search paths painted. Selected canvas
-opacity defaults to 100%, unselected to 30%. WebGL2 is required for the forest;
+opacity defaults to 100%, unselected to 75%. WebGL2 is required for the forest;
 chess remains playable without it.
 
 ## Implementation

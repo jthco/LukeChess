@@ -37,9 +37,33 @@ const puppeteer = require("puppeteer-core");
         p,
       );
       g.bindFramebuffer(g.FRAMEBUFFER, null);
-      return p.filter((v, i) => i % 4 === 3 && v > 0).length;
+      const opacity =
+        Number(document.querySelector("#forest-opacity").value) / 100;
+      let visible = 0;
+      for (let i = 0; i < p.length; i += 4) {
+        // Contrast on either board-square colour, not merely nonzero alpha.
+        const contrast = [
+          [240, 217, 181],
+          [181, 136, 99],
+        ].map((bg) =>
+          Math.max(
+            ...bg.map((v, channel) =>
+              Math.abs((p[i + channel] - (v * p[i + 3]) / 255) * opacity),
+            ),
+          ),
+        );
+        if (Math.min(...contrast) >= 20) visible++;
+      }
+      return {
+        painted: p.filter((v, i) => i % 4 === 3 && v > 0).length,
+        visible,
+      };
     });
-    assert(pixels > 100, "Opening forest must actually paint pixels");
+    assert(pixels.painted > 100, "Opening forest must actually paint pixels");
+    assert(
+      pixels.visible > 1500,
+      "Default forest must visibly contrast with the board",
+    );
     const audit = await page.evaluate(async () => {
       const fens = [
         game.chess.fen(),
