@@ -283,7 +283,12 @@ export class Forest {
       j.checks.push(m.check);
       j.depths.push(ply + 1);
       j.captures.push(!!m.capture);
-      if (m.capture) j.captureEvents.push({ target: victimId, depth: ply + 1 });
+      if (m.capture)
+        j.captureEvents.push({
+          target: victimId,
+          destination: m.to,
+          depth: ply + 1,
+        });
     }
     const out = [];
     for (const [id, j] of journeys) {
@@ -333,26 +338,14 @@ export class Forest {
         const settings = selected
           ? this.settings.selected
           : this.settings.forest;
-        const prefix = selected
-          ? "selected"
-          : j.color === "w"
-            ? "white"
-            : "black";
         const rgb = (hex) =>
           [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-        const first = rgb(options[prefix + "Start"]),
-          last = rgb(options[prefix + "End"]);
-        const tint = rgb(
-          options[selected ? "selectedTintColor" : "forestTintColor"],
+        const captureColor = rgb(
+          options[j.color === "w" ? "captureWhite" : "captureBlack"],
         );
-        const strength = options[selected ? "selectedTint" : "forestTint"];
-        const color = (t) =>
-          k <= lastCapture
-            ? [0.88, 0.025, 0.035]
-            : first.map(
-                (v, i) =>
-                  (v + (last[i] - v) * t) * (1 - strength) + tint[i] * strength,
-              );
+        const gray = options[j.color === "w" ? "whiteGray" : "blackGray"] / 100;
+        const color = () =>
+          k <= lastCapture ? captureColor : [gray, gray, gray];
         // Stroke width remains in CSS pixels on high-DPI displays.
         const width =
             options.width /
@@ -450,14 +443,41 @@ export class Forest {
               );
             }
           };
-          // Root identities locate the pieces on the current board, even if they
-          // move inside the future variation. The overlay stays below piece sprites.
-          ring(this.point(id), radius, radius, [0.04, 0.65, 0.12]);
-          if (capture.target) {
-            const centre = this.point(capture.target);
-            centre[1] -= 1 / 16;
-            ring(centre, radius * 2, radius, [0.88, 0.025, 0.035]);
-          }
+          const color = [1, 3, 5].map(
+            (i) =>
+              parseInt(
+                options[
+                  j.color === "w" ? "captureWhite" : "captureBlack"
+                ].slice(i, i + 2),
+                16,
+              ) / 255,
+          );
+          // Ellipse marks the capturer's current square, independent of future moves.
+          const origin = this.point(id);
+          origin[1] -= 1 / 16;
+          ring(origin, radius * 2, radius, color);
+          // Five-point star marks the actual future landing square, including en passant.
+          const centre = this.point(capture.destination);
+          const points = Array.from({ length: 10 }, (_, i) => {
+            const angle = Math.PI / 2 + (i * Math.PI) / 5,
+              r = radius * (i % 2 ? 0.42 : 1.2);
+            return [
+              centre[0] + Math.cos(angle) * r,
+              centre[1] + Math.sin(angle) * r,
+            ];
+          });
+          for (let i = 0; i < 10; i++)
+            out.push(
+              ...centre,
+              ...color,
+              alpha,
+              ...points[i],
+              ...color,
+              alpha,
+              ...points[(i + 1) % 10],
+              ...color,
+              alpha,
+            );
         }
     }
     return out;

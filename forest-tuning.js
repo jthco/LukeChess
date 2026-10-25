@@ -3,6 +3,8 @@ const groups = [
   [
     "Growth",
     [
+      ["whiteGray", "White path brightness (%)", 0, 100, 1, 80],
+      ["blackGray", "Black path brightness (%)", 0, 100, 1, 20],
       ["rate", "Paths per second", 0, 120, 1, 60, "forest-rate"],
       ["fade", "Fade speed", 0, 1, 0.001, 0.01, "forest-fade"],
       ["searchDepth", "Exploration depth", 2, 8, 1, 5],
@@ -32,7 +34,6 @@ const groups = [
       ["forestOpacity", "Canvas opacity (%)", 0, 100, 1, 75, "forest-opacity"],
       ["forestStroke", "Stroke opacity", 0, 1, 0.01, 0.28],
       ["forestFade", "Fade multiplier", 0, 5, 0.1, 1],
-      ["forestTint", "Tint strength", 0, 1, 0.01, 0],
     ],
   ],
   [
@@ -41,19 +42,12 @@ const groups = [
       ["selectedOpacity", "Canvas opacity (%)", 0, 100, 1, 100],
       ["selectedStroke", "Stroke opacity", 0, 1, 0.01, 0.4],
       ["selectedFade", "Fade multiplier", 0, 5, 0.1, 1.4],
-      ["selectedTint", "Tint strength", 0, 1, 0.01, 0],
     ],
   ],
 ];
 const colors = [
-  ["whiteStart", "White paths: start", "#063d59"],
-  ["whiteEnd", "White paths: end", "#1b6680"],
-  ["blackStart", "Black paths: start", "#7a1f0b"],
-  ["blackEnd", "Black paths: end", "#a13d20"],
-  ["selectedStart", "Selected: start", "#146b29"],
-  ["selectedEnd", "Selected: end", "#339947"],
-  ["forestTintColor", "Forest tint", "#457582"],
-  ["selectedTintColor", "Selected tint", "#79bd62"],
+  ["captureWhite", "White captures", "#ffda00"],
+  ["captureBlack", "Black captures", "#8c26d9"],
 ];
 const KEY = "lukechess.forest-tuning.v1";
 export function createForestTuning() {

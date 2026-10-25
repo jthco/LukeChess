@@ -210,18 +210,13 @@ const puppeteer = require("puppeteer-core");
       f.fen = new game.chess.constructor().fen();
       f.selected = null;
       f.options = { ...options, scatter: 0, curvature: 0, bendVariation: 0 };
-      const moves = [
-        { from: "e2", to: "e4", piece: "p", color: "w", capture: false },
-        { from: "d7", to: "d5", piece: "p", color: "b", capture: false },
-        { from: "e4", to: "d5", piece: "p", color: "w", capture: true },
-      ];
       const chunk = options.segments * 36;
       const ordinary = f.vertices(
         {
           seed: 0,
           moves: [
-            moves[0],
-            moves[1],
+            { from: "e2", to: "e4", piece: "p", color: "w", capture: false },
+            { from: "d7", to: "d5", piece: "p", color: "b", capture: false },
             { from: "g1", to: "f3", piece: "n", color: "w", capture: false },
           ],
         },
@@ -241,42 +236,50 @@ const puppeteer = require("puppeteer-core");
         ordinary[last + 12] - ordinary[last + 30],
         ordinary[last + 13] - ordinary[last + 31],
       );
-      f.options.captureRadius = 0;
-      const noRing = f.vertices({ seed: 0, moves }, false);
-      // Both moves of the capturing pawn's entire journey must be red.
-      let red = true;
-      for (let i = 0; i < chunk * 2; i += 6)
-        red &&=
-          noRing[i + 2] > 0.8 && noRing[i + 3] < 0.05 && noRing[i + 4] < 0.05;
-      f.options.captureRadius = 0.22;
-      const ring = f.vertices({ seed: 0, moves }, false);
-      const destination = f.point("d7");
-      destination[1] -= 1 / 16;
+      const whiteGray = ordinary.slice(2, 5),
+        blackGray = ordinary.slice(chunk + 2, chunk + 5);
+      const moves = [
+        { from: "e2", to: "e4", piece: "p", color: "w", capture: false },
+        { from: "d7", to: "d5", piece: "p", color: "b", capture: false },
+        { from: "e4", to: "d5", piece: "p", color: "w", capture: true },
+      ];
+      const capture = f.vertices({ seed: 0, moves }, false),
+        yellow = [1, 218 / 255, 0];
+      let allYellow = true;
+      for (let i = 0; i < 2 * chunk + 48 * 36 + 180; i += 6)
+        allYellow &&= yellow.every(
+          (v, c) => Math.abs(capture[i + 2 + c] - v) < 1e-6,
+        );
+      const origin = f.point("e2");
+      origin[1] -= 1 / 16;
       let sx = 0,
-        sy = 0,
-        count = 0;
-      // Ring is appended after this pawn's two segments, before the black path.
-      for (let i = chunk * 2 + 48 * 36; i < chunk * 2 + 2 * 48 * 36; i += 6) {
-        sx += ring[i];
-        sy += ring[i + 1];
-        count++;
+        sy = 0;
+      for (let i = 2 * chunk; i < 2 * chunk + 48 * 36; i += 6) {
+        sx += capture[i];
+        sy += capture[i + 1];
       }
-      const deepWidth = Math.abs(ring[chunk * 2 + 6] - ring[chunk * 2]);
-      const redOffset = chunk * 2 + 48 * 36;
-      const rx = (ring[redOffset] + ring[redOffset + 6]) / 2 - destination[0];
-      const quarter = redOffset + 12 * 36;
-      const ry = (ring[quarter + 1] + ring[quarter + 7]) / 2 - destination[1];
-      const green = ring[chunk * 2 + 3] > ring[chunk * 2 + 2];
-      f.fen = "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1";
-      const direct = f.vertices(
-        {
-          seed: 0,
-          moves: [
-            { from: "e4", to: "d5", piece: "p", color: "w", capture: true },
-          ],
-        },
-        false,
+      const ellipseError = Math.hypot(
+        sx / 288 - origin[0],
+        sy / 288 - origin[1],
       );
+      const off = 2 * chunk;
+      const rx = (capture[off] + capture[off + 6]) / 2 - origin[0],
+        q = off + 12 * 36;
+      const ry = (capture[q + 1] + capture[q + 7]) / 2 - origin[1];
+      const star = capture.slice(
+        2 * chunk + 48 * 36,
+        2 * chunk + 48 * 36 + 180,
+      );
+      const dest = f.point("d5");
+      let starError = 0;
+      for (let i = 0; i < star.length; i += 18)
+        starError += Math.hypot(star[i] - dest[0], star[i + 1] - dest[1]);
+      const outerTips = new Set();
+      for (let i = 0; i < 10; i += 2)
+        outerTips.add(star.slice(i * 18 + 6, i * 18 + 8).join(","));
+      const deepWidth = Math.abs(capture[off + 6] - capture[off]);
+      f.fen = "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1";
+      const direct = f.vertices({ seed: 0, moves: [moves[2]] }, false);
       const directWidth = Math.abs(direct[chunk + 6] - direct[chunk]);
       f.fen = "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1";
       const ep = f.vertices(
@@ -288,25 +291,33 @@ const puppeteer = require("puppeteer-core");
         },
         false,
       );
-      const epCentre = f.point("d5");
-      epCentre[1] -= 1 / 16;
-      const offset = chunk + 48 * 36;
-      let ex = 0,
-        ey = 0;
-      for (let i = offset; i < offset + 48 * 36; i += 6) {
-        ex += ep[i];
-        ey += ep[i + 1];
-      }
+      const epDest = f.point("d6"),
+        epOff = chunk + 48 * 36;
       const epError = Math.hypot(
-        ex / (48 * 6) - epCentre[0],
-        ey / (48 * 6) - epCentre[1],
+        ep[epOff] - epDest[0],
+        ep[epOff + 1] - epDest[1],
       );
-      // A bishop's capture marker must survive later quiet moves in that branch.
+      f.fen = "4k3/8/8/8/3p4/4P3/8/4K3 b - - 0 1";
+      const black = f.vertices(
+        {
+          seed: 0,
+          moves: [
+            { from: "d4", to: "e3", piece: "p", color: "b", capture: true },
+          ],
+        },
+        false,
+      );
+      const purple = [140 / 255, 38 / 255, 217 / 255];
+      let allPurple = true;
+      for (let i = 0; i < black.length; i += 6)
+        allPurple &&= purple.every(
+          (v, c) => Math.abs(black[i + 2 + c] - v) < 1e-6,
+        );
       f.fen = "4k3/5p2/8/8/2B5/8/8/4K3 w - - 0 1";
-      const legal = new game.chess.constructor(f.fen),
+      const chess = new game.chess.constructor(f.fen),
         bishopMoves = [];
       for (const san of ["Bxf7+", "Kd8", "Be6"]) {
-        const m = legal.move(san);
+        const m = chess.move(san);
         bishopMoves.push({
           from: m.from,
           to: m.to,
@@ -316,16 +327,10 @@ const puppeteer = require("puppeteer-core");
         });
       }
       const bishop = f.vertices({ seed: 0, moves: bishopMoves }, false);
-      const bishopGreen =
-        bishop[2 * chunk + 3] > 0.6 && bishop[2 * chunk + 2] < 0.1;
+      const retained = bishop.length === 3 * chunk + 48 * 36 + 180;
       f.fen = new game.chess.constructor().fen();
       f.options.scatter = 0.1;
-      const single = {
-        seed: 1,
-        moves: [
-          { from: "e2", to: "e4", piece: "p", color: "w", capture: false },
-        ],
-      };
+      const single = { seed: 1, moves: [moves[0]] };
       const fanA = f.vertices(single, false),
         fanB = f.vertices({ ...single, seed: 2 }, false);
       const tip = (v) => [
@@ -346,65 +351,45 @@ const puppeteer = require("puppeteer-core");
       f.options = options;
       f.selected = selected;
       return {
-        bishopGreen,
-        tipError,
-        sourceSpread,
-        deepWidth,
-        directWidth,
-        ellipseRatio: rx / ry,
-        green,
-        epError,
         alphas,
         startWidth,
         endWidth,
-        red,
-        ringAdded: ring.length - noRing.length,
-        centreError: Math.hypot(
-          sx / count - destination[0],
-          sy / count - destination[1],
-        ),
+        whiteGray,
+        blackGray,
+        allYellow,
+        allPurple,
+        ellipseError,
+        ellipseRatio: rx / ry,
+        starError,
+        tips: outerTips.size,
+        directWidth,
+        deepWidth,
+        epError,
+        retained,
+        tipError,
+        sourceSpread,
       };
     });
-    assert(
-      appearance.startWidth > appearance.endWidth * 2,
-      "Stroke must be widest at its source",
-    );
+    assert(appearance.startWidth > appearance.endWidth * 2);
     assert(
       appearance.alphas[0] > appearance.alphas[1] &&
         appearance.alphas[1] > appearance.alphas[2],
-      "Actual search generations must fade progressively",
     );
-    assert(appearance.red, "Entire capture-ending journey must be red");
-    assert.equal(appearance.ringAdded, 2 * 48 * 36);
+    assert.deepEqual(appearance.whiteGray, [0.8, 0.8, 0.8]);
+    assert.deepEqual(appearance.blackGray, [0.2, 0.2, 0.2]);
     assert(
-      appearance.centreError < 1e-6,
-      "Capture ellipse must sit under the target piece",
+      appearance.allYellow && appearance.allPurple,
+      "Capture paths and both markers must use the capturing side colour",
     );
-    assert(appearance.green, "Capturing piece must have a green circle");
+    assert(appearance.ellipseError < 1e-6);
+    assert(Math.abs(appearance.ellipseRatio - 2) < 1e-6);
     assert(
-      Math.abs(appearance.ellipseRatio - 2) < 1e-6,
-      "Target ellipse must be twice as wide as tall",
+      appearance.starError < 1e-6 && appearance.tips === 5,
+      "Five-point star must mark the future capture square",
     );
-    assert(
-      Math.abs(appearance.directWidth / appearance.deepWidth - 3) < 1e-6,
-      "Three-ply captures must have one third the marker stroke width",
-    );
-    assert(
-      appearance.epError < 1e-6,
-      "En passant must mark the captured pawn, not the empty landing square",
-    );
-    assert(
-      appearance.bishopGreen,
-      "Bishop capturer must remain green when search continues after its capture",
-    );
-    assert(
-      appearance.tipError < 1e-6,
-      "Accumulated tips must converge on the destination",
-    );
-    assert(
-      appearance.sourceSpread > 0.001,
-      "Scatter must broaden the source rather than the destination",
-    );
+    assert(Math.abs(appearance.directWidth / appearance.deepWidth - 3) < 1e-6);
+    assert(appearance.epError < 1e-6 && appearance.retained);
+    assert(appearance.tipError < 1e-6 && appearance.sourceSpread > 0.001);
     // Tuning must affect real geometry and persist through a reload.
     const tuning = await page.evaluate(async () => {
       const set = (key, value) => {

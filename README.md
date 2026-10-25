@@ -13,8 +13,9 @@ paths. Expand the Living forest tuning groups to adjust:
   stroke width in CSS pixels, tip-width ratio, lookahead fading, capture-circle
   size, and curve smoothness.
 - Independent forest/selected layers: canvas opacity, stroke opacity, fade
-  multiplier, and tint strength.
-- Colours: White, Black and selected gradient endpoints, plus each layer's tint.
+  multiplier.
+- Colours: capture colours for White and Black. Ordinary paths stay monochrome,
+  with separate brightness faders (White 80%, Black 20%).
 
 Every fader displays its value. Changes affect new strokes while existing
 feedback fades naturally; canvas opacity and fading affect existing marks too.
@@ -37,7 +38,8 @@ WebGL2 is required for the forest; chess remains playable without it.
 - `forest.js` tracks piece identities from the root position through each legal
   variation, including promotions, captures, en passant, and castling. A piece's
   successive visited squares form connected quadratic segments. Only curvature,
-  depth-tapered perpendicular scatter, and palette interpolation are artistic.
+  depth-tapered perpendicular scatter are artistic. Ordinary paths are grayscale;
+  capture prefixes and markers use the capturing side's colour.
 - Two layers each use ping-pong WebGL2 feedback textures. Each frame fades the
   previous image and adds a limited number of complete paths. Stroke opacity is
   separate from compositing opacity. `forest-tuning.js` defines the controls,
@@ -54,18 +56,14 @@ WebGL2 is required for the forest; chess remains playable without it.
   Alpha is multiplied by exp(-lookaheadFading * (ply - 1)), using
   actual search ply rather than the number of times that piece moved. Width
   and scatter also taper with actual search depth.
-- The prefix of a piece journey through its last capture is red, overriding
-  normal palettes and tints. The capturing piece gets a green circle and its
-  target a red ellipse, both below the sprites at their current root-position
-  squares. The ellipse has the same height as the circle and twice the width,
-  centred 75% down the square on screen, including after board flips. Root
-  identities also locate a target that moves later, or an en passant victim.
-  Marker stroke width defaults to 12 CSS pixels divided by search ply, so
-  immediate captures are thickest; width, depth thinning, and radius have faders.
-  Every explored capture contributes markers, even if that piece later makes
-  a quiet move in the same branch. A piece may be both a capturer and a target
-  across different variations. These marks share their layer's accumulation
-  and fading.
+- The prefix of a piece journey through its last capture uses the capturing
+  side's colour: yellow for White, purple for Black. The capturing piece gets
+  a 2:1 ellipse at its current root square, centred 75% down the square. A
+  filled five-pointed star marks the actual future capture landing square,
+  including en passant. Path and both markers use the same colour regardless
+  of selection. Marker stroke width defaults to 12 CSS pixels divided by ply;
+  width, depth thinning, radius and capture colours have controls. Every visited
+  capture remains represented even if followed by a quiet move in the branch.
 - Position changes clear old feedback/queues and invalidate messages by position
   generation. Board flips clear orientation-dependent feedback. Selection routes
   new strokes without restarting search; old strokes fade naturally. Playback
@@ -86,7 +84,7 @@ Run `npm ci`, start the static server in the repository root, then run
 pixels, sampled legal search paths in special-move positions, selected-tree
 routing, tap and drag gameplay with Stockfish replies, Undo, board flipping,
 resize, real feedback fading, tuning effects/persistence/reset, deterministic
-curvature, source-to-tip taper, generation opacity, capture-path colour/circle
+curvature, source-to-tip taper, generation opacity, capture-path colour, capturer ellipse and five-point capture-star
 placement, and gameplay without WebGL2.
 
 ## Explorer attribution
