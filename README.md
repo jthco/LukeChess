@@ -57,12 +57,14 @@ WebGL2 is required for the forest; chess remains playable without it.
   actual search ply rather than the number of times that piece moved. Width
   and scatter also taper with actual search depth.
 - The prefix of a piece journey through its last capture uses the capturing
-  side's colour: yellow for White, purple for Black. The capturing piece gets
-  a 2:1 ellipse at its current root square, centred 75% down the square. A
-  filled five-pointed star marks the actual future capture landing square,
+  side's colour: orange for White, purple for Black. The capturing piece gets
+  a 2:1 ellipse at its current root square, centred 75% down the square. An
+  outlined five-pointed star, 50% larger than the original, marks the future
+  capture landing square,
   including en passant. Path and both markers use the same colour regardless
-  of selection. Marker stroke width defaults to 12 CSS pixels divided by ply;
-  width, depth thinning, radius and capture colours have controls. Every visited
+  of selection. Marker stroke width defaults to 24 CSS pixels divided by ply;
+  both star and ellipse outlines thin by the same lookahead rule. Width, depth
+  thinning, radius and capture colours have controls. Every visited
   capture remains represented even if followed by a quiet move in the branch.
 - Position changes clear old feedback/queues and invalidate messages by position
   generation. Board flips clear orientation-dependent feedback. Selection routes

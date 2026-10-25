@@ -20,7 +20,7 @@ const groups = [
       ["scatter", "Perpendicular scatter", 0, 0.2, 0.001, 0.0425],
       ["generationFade", "Lookahead fading", 0, 1, 0.05, 0.3],
       ["tipWidth", "Tip width ratio", 0, 1, 0.05, 0.2],
-      ["captureWidth", "Capture stroke width (px)", 1, 24, 0.5, 12],
+      ["captureWidth", "Capture stroke width (px)", 1, 48, 0.5, 24],
       ["captureTaper", "Capture depth thinning", 0, 2, 0.1, 1],
       ["captureRadius", "Capture marker radius (squares)", 0, 0.45, 0.01, 0.22],
       ["taper", "Depth taper", 0, 2, 0.05, 0.5],
@@ -46,7 +46,7 @@ const groups = [
   ],
 ];
 const colors = [
-  ["captureWhite", "White captures", "#ffda00"],
+  ["captureWhite", "White captures", "#ff8800"],
   ["captureBlack", "Black captures", "#8c26d9"],
 ];
 const KEY = "lukechess.forest-tuning.v1";
@@ -58,6 +58,13 @@ export function createForestTuning() {
   try {
     saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {};
   } catch {}
+  // Apply the revised defaults once, preserving all other local tuning.
+  if (saved.captureStyleVersion !== 2) {
+    if (!saved.captureWhite || saved.captureWhite.toLowerCase() === "#ffda00")
+      saved.captureWhite = "#ff8800";
+    if (Number.isFinite(saved.captureWidth))
+      saved.captureWidth = Math.min(48, saved.captureWidth * 2);
+  }
   for (const [title, fields] of groups) {
     const section = document.createElement("details");
     section.open = title === "Growth";
@@ -116,7 +123,10 @@ export function createForestTuning() {
   const update = () => {
     for (const [key, output] of outputs) output.value = inputs.get(key).value;
     try {
-      localStorage.setItem(KEY, JSON.stringify(read()));
+      localStorage.setItem(
+        KEY,
+        JSON.stringify({ ...read(), captureStyleVersion: 2 }),
+      );
     } catch {}
   };
   root.addEventListener("input", update);
@@ -132,6 +142,7 @@ export function createForestTuning() {
   root.append(reset);
   // Reading may be unavailable in privacy modes; controls still work.
   for (const [key, output] of outputs) output.value = inputs.get(key).value;
+  update();
   return { read };
 }
 export function bendDirection(square) {

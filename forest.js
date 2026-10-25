@@ -410,12 +410,11 @@ export class Forest {
           const alpha =
             settings.strokeOpacity *
             Math.exp(-options.generationFade * (depth - 1));
-          const halfWidth = Math.min(
-            radius * 0.8,
-            options.captureWidth /
-              this.canvas.getBoundingClientRect().width /
-              Math.pow(depth, options.captureTaper),
-          );
+          const halfWidth =
+            Math.min(
+              radius * 0.8,
+              options.captureWidth / this.canvas.getBoundingClientRect().width,
+            ) / Math.pow(depth, options.captureTaper);
           const ring = (centre, rx, ry, color) => {
             const vertex = (angle, side) => {
               const x = Math.cos(angle),
@@ -458,26 +457,35 @@ export class Forest {
           ring(origin, radius * 2, radius, color);
           // Five-point star marks the actual future landing square, including en passant.
           const centre = this.point(capture.destination);
-          const points = Array.from({ length: 10 }, (_, i) => {
+          // Outer radius is exactly 1.5x the previous star. A nested inner
+          // contour keeps the centre open even at the thickest setting.
+          const outer = [],
+            inner = [];
+          for (let i = 0; i < 10; i++) {
             const angle = Math.PI / 2 + (i * Math.PI) / 5,
-              r = radius * (i % 2 ? 0.42 : 1.2);
-            return [
+              r = radius * (i % 2 ? 0.63 : 1.8);
+            const inset = Math.max(r * 0.12, r - halfWidth * 2);
+            outer.push([
               centre[0] + Math.cos(angle) * r,
               centre[1] + Math.sin(angle) * r,
-            ];
-          });
-          for (let i = 0; i < 10; i++)
+            ]);
+            inner.push([
+              centre[0] + Math.cos(angle) * inset,
+              centre[1] + Math.sin(angle) * inset,
+            ]);
+          }
+          const vertex = (p) => [...p, ...color, alpha];
+          for (let i = 0; i < 10; i++) {
+            const next = (i + 1) % 10;
             out.push(
-              ...centre,
-              ...color,
-              alpha,
-              ...points[i],
-              ...color,
-              alpha,
-              ...points[(i + 1) % 10],
-              ...color,
-              alpha,
+              ...vertex(outer[i]),
+              ...vertex(inner[i]),
+              ...vertex(inner[next]),
+              ...vertex(outer[i]),
+              ...vertex(inner[next]),
+              ...vertex(outer[next]),
             );
+          }
         }
     }
     return out;

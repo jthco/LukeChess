@@ -244,10 +244,10 @@ const puppeteer = require("puppeteer-core");
         { from: "e4", to: "d5", piece: "p", color: "w", capture: true },
       ];
       const capture = f.vertices({ seed: 0, moves }, false),
-        yellow = [1, 218 / 255, 0];
-      let allYellow = true;
-      for (let i = 0; i < 2 * chunk + 48 * 36 + 180; i += 6)
-        allYellow &&= yellow.every(
+        orange = [1, 136 / 255, 0];
+      let allOrange = true;
+      for (let i = 0; i < 2 * chunk + 48 * 36 + 360; i += 6)
+        allOrange &&= orange.every(
           (v, c) => Math.abs(capture[i + 2 + c] - v) < 1e-6,
         );
       const origin = f.point("e2");
@@ -268,15 +268,27 @@ const puppeteer = require("puppeteer-core");
       const ry = (capture[q + 1] + capture[q + 7]) / 2 - origin[1];
       const star = capture.slice(
         2 * chunk + 48 * 36,
-        2 * chunk + 48 * 36 + 180,
+        2 * chunk + 48 * 36 + 360,
       );
       const dest = f.point("d5");
-      let starError = 0;
-      for (let i = 0; i < star.length; i += 18)
-        starError += Math.hypot(star[i] - dest[0], star[i + 1] - dest[1]);
+      let sxStar = 0,
+        syStar = 0;
       const outerTips = new Set();
+      let minStarRadius = Infinity,
+        maxStarRadius = 0;
+      for (let i = 0; i < star.length; i += 6) {
+        sxStar += star[i];
+        syStar += star[i + 1];
+        const r = Math.hypot(star[i] - dest[0], star[i + 1] - dest[1]);
+        minStarRadius = Math.min(minStarRadius, r);
+        maxStarRadius = Math.max(maxStarRadius, r);
+      }
+      const starError = Math.hypot(
+        sxStar / 60 - dest[0],
+        syStar / 60 - dest[1],
+      );
       for (let i = 0; i < 10; i += 2)
-        outerTips.add(star.slice(i * 18 + 6, i * 18 + 8).join(","));
+        outerTips.add(star.slice(i * 36, i * 36 + 2).join(","));
       const deepWidth = Math.abs(capture[off + 6] - capture[off]);
       f.fen = "4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1";
       const direct = f.vertices({ seed: 0, moves: [moves[2]] }, false);
@@ -293,10 +305,13 @@ const puppeteer = require("puppeteer-core");
       );
       const epDest = f.point("d6"),
         epOff = chunk + 48 * 36;
-      const epError = Math.hypot(
-        ep[epOff] - epDest[0],
-        ep[epOff + 1] - epDest[1],
-      );
+      let epX = 0,
+        epY = 0;
+      for (let i = epOff; i < epOff + 360; i += 6) {
+        epX += ep[i];
+        epY += ep[i + 1];
+      }
+      const epError = Math.hypot(epX / 60 - epDest[0], epY / 60 - epDest[1]);
       f.fen = "4k3/8/8/8/3p4/4P3/8/4K3 b - - 0 1";
       const black = f.vertices(
         {
@@ -327,7 +342,7 @@ const puppeteer = require("puppeteer-core");
         });
       }
       const bishop = f.vertices({ seed: 0, moves: bishopMoves }, false);
-      const retained = bishop.length === 3 * chunk + 48 * 36 + 180;
+      const retained = bishop.length === 3 * chunk + 48 * 36 + 360;
       f.fen = new game.chess.constructor().fen();
       f.options.scatter = 0.1;
       const single = { seed: 1, moves: [moves[0]] };
@@ -356,10 +371,13 @@ const puppeteer = require("puppeteer-core");
         endWidth,
         whiteGray,
         blackGray,
-        allYellow,
+        allOrange,
         allPurple,
         ellipseError,
         ellipseRatio: rx / ry,
+        minStarRadius,
+        maxStarRadius,
+        expectedStarRadius: (0.22 / 4) * 1.8,
         starError,
         tips: outerTips.size,
         directWidth,
@@ -378,7 +396,7 @@ const puppeteer = require("puppeteer-core");
     assert.deepEqual(appearance.whiteGray, [0.8, 0.8, 0.8]);
     assert.deepEqual(appearance.blackGray, [0.2, 0.2, 0.2]);
     assert(
-      appearance.allYellow && appearance.allPurple,
+      appearance.allOrange && appearance.allPurple,
       "Capture paths and both markers must use the capturing side colour",
     );
     assert(appearance.ellipseError < 1e-6);
@@ -388,6 +406,11 @@ const puppeteer = require("puppeteer-core");
       "Five-point star must mark the future capture square",
     );
     assert(Math.abs(appearance.directWidth / appearance.deepWidth - 3) < 1e-6);
+    assert(appearance.minStarRadius > 0, "Star must have an open centre");
+    assert(
+      Math.abs(appearance.maxStarRadius - appearance.expectedStarRadius) < 1e-6,
+      "Star must be 50% bigger",
+    );
     assert(appearance.epError < 1e-6 && appearance.retained);
     assert(appearance.tipError < 1e-6 && appearance.sourceSpread > 0.001);
     // Tuning must affect real geometry and persist through a reload.
@@ -443,6 +466,35 @@ const puppeteer = require("puppeteer-core");
     assert.equal(await page.$eval("#forest-width", (e) => e.value), "2");
     await page.click("#forest-tuning button");
     assert.equal(await page.$eval("#forest-width", (e) => e.value), "1.4");
+    // Upgrade the previous defaults without resetting unrelated user tuning.
+    await page.evaluate(() =>
+      localStorage.setItem(
+        "lukechess.forest-tuning.v1",
+        JSON.stringify({
+          captureWhite: "#ffda00",
+          captureWidth: 12,
+          curvature: 0.12,
+        }),
+      ),
+    );
+    await page.reload();
+    await page.waitForFunction(() => window.game);
+    assert.equal(
+      await page.$eval("#forest-captureWhite", (e) => e.value),
+      "#ff8800",
+    );
+    assert.equal(
+      await page.$eval("#forest-captureWidth", (e) => e.value),
+      "24",
+    );
+    assert.equal(await page.$eval("#forest-curvature", (e) => e.value), "0.12");
+    await page.reload();
+    await page.waitForFunction(() => window.game);
+    assert.equal(
+      await page.$eval("#forest-captureWidth", (e) => e.value),
+      "24",
+      "Migration must not double thickness on every reload",
+    );
     const fallback = await browser.newPage();
     await fallback.evaluateOnNewDocument(() => {
       const original = HTMLCanvasElement.prototype.getContext;
